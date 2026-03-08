@@ -27,6 +27,7 @@
                           PreviewMouseLeftButtonDown="PlanTreeView_PreviewMouseLeftButtonDown"
                           PreviewMouseMove="PlanTreeView_PreviewMouseMove"
                           PreviewMouseRightButtonDown="PlanTreeView_PreviewMouseRightButtonDown"
+                          DragOver="PlanTreeView_DragOver"
                           Drop="PlanTreeView_Drop">
                     <TreeView.ItemTemplate>
                         <HierarchicalDataTemplate ItemsSource="{Binding Children}">

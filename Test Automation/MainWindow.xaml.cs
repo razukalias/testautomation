@@ -147,40 +147,94 @@ namespace Test_Automation
                 return;
             }
 
-            DragDrop.DoDragDrop(PlanTreeView, _draggedNode, DragDropEffects.Move);
+            DragDrop.DoDragDrop(PlanTreeView, new DataObject(typeof(PlanNode), _draggedNode), DragDropEffects.Move);
+            _draggedNode = null;
+        }
+
+        private void PlanTreeView_DragOver(object sender, DragEventArgs e)
+        {
+            if (!TryGetDragNodes(e, out var sourceNode, out var targetNode))
+            {
+                e.Effects = DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
+
+            var canReorder = CanReorder(sourceNode, targetNode);
+            e.Effects = canReorder ? DragDropEffects.Move : DragDropEffects.None;
+            e.Handled = true;
         }
 
         private void PlanTreeView_Drop(object sender, DragEventArgs e)
         {
-            if (!e.Data.GetDataPresent(typeof(PlanNode)))
+            if (!TryGetDragNodes(e, out var sourceNode, out var targetNode))
             {
+                e.Handled = true;
                 return;
             }
 
-            var sourceNode = (PlanNode)e.Data.GetData(typeof(PlanNode));
-            var targetItem = FindParentTreeViewItem(e.OriginalSource as DependencyObject);
-            var targetNode = targetItem?.DataContext as PlanNode;
-
-            if (targetNode == null || ReferenceEquals(sourceNode, targetNode))
+            if (!CanReorder(sourceNode, targetNode))
             {
+                e.Handled = true;
                 return;
             }
 
             var sourceParent = sourceNode.Parent;
-            var targetParent = targetNode.Parent;
-
-            if (!ReferenceEquals(sourceParent, targetParent))
-            {
-                return;
-            }
 
             if (sourceParent == null)
             {
                 ReorderInCollection(RootNodes, sourceNode, targetNode);
+                e.Handled = true;
                 return;
             }
 
             ReorderInCollection(sourceParent.Children, sourceNode, targetNode);
+            e.Handled = true;
+        }
+
+        private bool TryGetDragNodes(DragEventArgs e, out PlanNode sourceNode, out PlanNode targetNode)
+        {
+            sourceNode = null!;
+            targetNode = null!;
+
+            if (!e.Data.GetDataPresent(typeof(PlanNode)))
+            {
+                return false;
+            }
+
+            var source = e.Data.GetData(typeof(PlanNode)) as PlanNode;
+            if (source == null)
+            {
+                return false;
+            }
+
+            var position = e.GetPosition(PlanTreeView);
+            var target = GetNodeAtPosition(position);
+            if (target == null)
+            {
+                return false;
+            }
+
+            sourceNode = source;
+            targetNode = target;
+            return true;
+        }
+
+        private bool CanReorder(PlanNode sourceNode, PlanNode targetNode)
+        {
+            if (ReferenceEquals(sourceNode, targetNode))
+            {
+                return false;
+            }
+
+            return ReferenceEquals(sourceNode.Parent, targetNode.Parent);
+        }
+
+        private PlanNode? GetNodeAtPosition(Point position)
+        {
+            var hit = PlanTreeView.InputHitTest(position) as DependencyObject;
+            var targetItem = FindParentTreeViewItem(hit);
+            return targetItem?.DataContext as PlanNode;
         }
 
         private static void ReorderInCollection(ObservableCollection<PlanNode> collection, PlanNode sourceNode, PlanNode targetNode)
