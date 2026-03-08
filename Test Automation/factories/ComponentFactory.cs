@@ -13,6 +13,7 @@ namespace Test_Automation.Factories
             return componentType?.ToLower() switch
             {
                 "http" => new Http(),
+                "graphql" => new GraphQl(),
                 "timer" => new Test_Automation.Componentes.Timer(),
                 "sql" => new Sql(),
                 "dataset" => new Dataset(),

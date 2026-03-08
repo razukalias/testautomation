@@ -47,6 +47,27 @@ namespace Test_Automation.Models
     }
 
     /// <summary>
+    /// GraphQL component model
+    /// </summary>
+    public class GraphQlData : ComponentData
+    {
+        [JsonPropertyName("endpoint")]
+        public string Endpoint { get; set; }
+
+        [JsonPropertyName("query")]
+        public string Query { get; set; }
+
+        [JsonPropertyName("variables")]
+        public string Variables { get; set; } = "{}";
+
+        [JsonPropertyName("responseStatus")]
+        public int? ResponseStatus { get; set; }
+
+        [JsonPropertyName("responseBody")]
+        public string ResponseBody { get; set; }
+    }
+
+    /// <summary>
     /// SQL component model
     /// </summary>
     public class SqlData : ComponentData
