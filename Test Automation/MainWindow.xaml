@@ -5,8 +5,43 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Test_Automation"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="Test Automation" Height="650" Width="1100">
     <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="320" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
+        <Border Grid.Column="0" BorderBrush="#D0D0D0" BorderThickness="0,0,1,0" Background="#FAFAFA">
+            <DockPanel Margin="12">
+                <Button x:Name="AddTestPlanButton"
+                        DockPanel.Dock="Top"
+                        Height="32"
+                        Margin="0,0,0,8"
+                        Content="Add TestPlan"
+                        Click="AddTestPlanButton_Click" />
+
+                <TreeView x:Name="PlanTreeView"
+                          ItemsSource="{Binding RootNodes}"
+                          AllowDrop="True"
+                          PreviewMouseLeftButtonDown="PlanTreeView_PreviewMouseLeftButtonDown"
+                          PreviewMouseMove="PlanTreeView_PreviewMouseMove"
+                          PreviewMouseRightButtonDown="PlanTreeView_PreviewMouseRightButtonDown"
+                          Drop="PlanTreeView_Drop">
+                    <TreeView.ItemTemplate>
+                        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </HierarchicalDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Column="1" Background="#FFFFFF">
+            <TextBlock Margin="16"
+                       Foreground="#666"
+                       FontSize="16"
+                       Text="Center panel to be decided later" />
+        </Grid>
     </Grid>
 </Window>
