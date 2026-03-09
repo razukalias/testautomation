@@ -38,6 +38,14 @@ namespace Test_Automation.Componentes
             }
         }
 
+        public void SetId(string id)
+        {
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                Id = id;
+            }
+        }
+
         public void AddChild(Component child)
         {
             if (child != null)

@@ -1005,7 +1005,7 @@ namespace Test_Automation
 
             try
             {
-                var context = new Test_Automation.Models.ExecutionContext();
+                var context = _lastExecutionContext ?? new Test_Automation.Models.ExecutionContext();
                 var result = await executor.ExecuteComponentTree(component, context);
                 context.Results.Add(result);
 
@@ -1046,6 +1046,7 @@ namespace Test_Automation
 
             var component = ComponentFactory.CreateComponent(node.Type);
             component.SetName(node.Name);
+            component.SetId(node.Id);
 
             var settings = new Dictionary<string, string>();
             foreach (var setting in node.Settings)
@@ -1516,6 +1517,7 @@ namespace Test_Automation
             }
 
             var nodeType = SelectedNode.Type;
+            var nodeId = SelectedNode.Id;
             var nodeName = SelectedNode.Name;
             var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
 
@@ -1523,8 +1525,21 @@ namespace Test_Automation
             {
                 var method = GetSettingValue("Method", "GET");
                 var url = GetSettingValue("Url", "https://api.example.com");
-                var lastHttp = GetLastExecutionData<HttpData>(nodeName);
-                var httpRuns = GetExecutionResults(nodeName)
+                var lastHttp = GetLastExecutionData<HttpData>(nodeId);
+                var httpRequestRuns = GetExecutionResults(nodeId)
+                    .Where(result => result.Data is HttpData)
+                    .Select(result => new
+                    {
+                        threadIndex = result.ThreadIndex,
+                        durationMs = result.DurationMs,
+                        status = result.Status,
+                        method = (result.Data as HttpData)?.Method,
+                        url = (result.Data as HttpData)?.Url,
+                        headers = (result.Data as HttpData)?.Headers,
+                        body = (result.Data as HttpData)?.Body
+                    })
+                    .ToList();
+                var httpRuns = GetExecutionResults(nodeId)
                     .Where(result => result.Data is HttpData)
                     .Select(result => new
                     {
@@ -1535,13 +1550,23 @@ namespace Test_Automation
                         responseBody = (result.Data as HttpData)?.ResponseBody
                     })
                     .ToList();
-                PreviewRequest = JsonSerializer.Serialize(new
+                if (httpRequestRuns.Count > 0)
                 {
-                    component = nodeName,
-                    type = "Http",
-                    method,
-                    url
-                }, new JsonSerializerOptions { WriteIndented = true });
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        runs = httpRequestRuns
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                else
+                {
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        component = nodeName,
+                        type = "Http",
+                        method,
+                        url
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
 
                 if (httpRuns.Count > 0)
                 {
@@ -1579,8 +1604,21 @@ namespace Test_Automation
                 var endpoint = GetSettingValue("Endpoint", "https://api.example.com/graphql");
                 var query = GetSettingValue("Query", "query { health }");
                 var variables = GetSettingValue("Variables", "{}");
-                var lastGraphQl = GetLastExecutionData<GraphQlData>(nodeName);
-                var graphRuns = GetExecutionResults(nodeName)
+                var lastGraphQl = GetLastExecutionData<GraphQlData>(nodeId);
+                var graphRequestRuns = GetExecutionResults(nodeId)
+                    .Where(result => result.Data is GraphQlData)
+                    .Select(result => new
+                    {
+                        threadIndex = result.ThreadIndex,
+                        durationMs = result.DurationMs,
+                        status = result.Status,
+                        endpoint = (result.Data as GraphQlData)?.Endpoint,
+                        query = (result.Data as GraphQlData)?.Query,
+                        variables = (result.Data as GraphQlData)?.Variables,
+                        headers = (result.Data as GraphQlData)?.Headers
+                    })
+                    .ToList();
+                var graphRuns = GetExecutionResults(nodeId)
                     .Where(result => result.Data is GraphQlData)
                     .Select(result => new
                     {
@@ -1591,14 +1629,24 @@ namespace Test_Automation
                         responseBody = (result.Data as GraphQlData)?.ResponseBody
                     })
                     .ToList();
-                PreviewRequest = JsonSerializer.Serialize(new
+                if (graphRequestRuns.Count > 0)
                 {
-                    component = nodeName,
-                    type = "GraphQl",
-                    endpoint,
-                    query,
-                    variables
-                }, new JsonSerializerOptions { WriteIndented = true });
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        runs = graphRequestRuns
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                else
+                {
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        component = nodeName,
+                        type = "GraphQl",
+                        endpoint,
+                        query,
+                        variables
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
 
                 if (graphRuns.Count > 0)
                 {
@@ -1634,8 +1682,19 @@ namespace Test_Automation
             {
                 var connection = GetSettingValue("Connection", "Server=.;Database=master;Trusted_Connection=True;");
                 var query = GetSettingValue("Query", "SELECT 1");
-                var lastSql = GetLastExecutionData<SqlData>(nodeName);
-                var sqlRuns = GetExecutionResults(nodeName)
+                var lastSql = GetLastExecutionData<SqlData>(nodeId);
+                var sqlRequestRuns = GetExecutionResults(nodeId)
+                    .Where(result => result.Data is SqlData)
+                    .Select(result => new
+                    {
+                        threadIndex = result.ThreadIndex,
+                        durationMs = result.DurationMs,
+                        status = result.Status,
+                        connection = (result.Data as SqlData)?.ConnectionString,
+                        query = (result.Data as SqlData)?.Query
+                    })
+                    .ToList();
+                var sqlRuns = GetExecutionResults(nodeId)
                     .Where(result => result.Data is SqlData)
                     .Select(result => new
                     {
@@ -1645,13 +1704,23 @@ namespace Test_Automation
                         rows = (result.Data as SqlData)?.QueryResult
                     })
                     .ToList();
-                PreviewRequest = JsonSerializer.Serialize(new
+                if (sqlRequestRuns.Count > 0)
                 {
-                    component = nodeName,
-                    type = "Sql",
-                    connection,
-                    query
-                }, new JsonSerializerOptions { WriteIndented = true });
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        runs = sqlRequestRuns
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                else
+                {
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        component = nodeName,
+                        type = "Sql",
+                        connection,
+                        query
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
 
                 if (sqlRuns.Count > 0)
                 {
@@ -1688,9 +1757,9 @@ namespace Test_Automation
             {
                 var threadCount = GetSettingValue("ThreadCount", "1");
                 var rampUp = GetSettingValue("RampUpSeconds", "1");
-                var childNames = GetDescendantNames(SelectedNode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var childIds = GetDescendantIds(SelectedNode).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var lastResults = _lastExecutionContext?.Results
-                    .Where(result => childNames.Contains(result.ComponentName))
+                    .Where(result => childIds.Contains(result.ComponentId))
                     .Select(result => (object)new
                     {
                         name = result.ComponentName,
@@ -1728,7 +1797,17 @@ namespace Test_Automation
             {
                 var language = GetSettingValue("Language", "CSharp");
                 var code = GetSettingValue("Code", string.Empty);
-                var scriptRuns = GetExecutionResults(nodeName)
+                var scriptRequestRuns = GetExecutionResults(nodeId)
+                    .Select(result => new
+                    {
+                        threadIndex = result.ThreadIndex,
+                        durationMs = result.DurationMs,
+                        status = result.Status,
+                        language = (result.Data as ScriptData)?.ScriptLanguage,
+                        code = (result.Data as ScriptData)?.ScriptCode
+                    })
+                    .ToList();
+                var scriptRuns = GetExecutionResults(nodeId)
                     .Select(result => new
                     {
                         threadIndex = result.ThreadIndex,
@@ -1738,13 +1817,23 @@ namespace Test_Automation
                         error = result.Error
                     })
                     .ToList();
-                PreviewRequest = JsonSerializer.Serialize(new
+                if (scriptRequestRuns.Count > 0)
                 {
-                    component = nodeName,
-                    type = "Script",
-                    language,
-                    code
-                }, new JsonSerializerOptions { WriteIndented = true });
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        runs = scriptRequestRuns
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                else
+                {
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        component = nodeName,
+                        type = "Script",
+                        language,
+                        code
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
 
                 if (scriptRuns.Count > 0)
                 {
@@ -1772,7 +1861,7 @@ namespace Test_Automation
                 .Where(setting => !string.IsNullOrWhiteSpace(setting.Key))
                 .ToDictionary(setting => setting.Key, setting => setting.Value);
 
-            var genericRuns = GetExecutionResults(nodeName)
+            var genericRuns = GetExecutionResults(nodeId)
                 .Select(result => new
                 {
                     threadIndex = result.ThreadIndex,
@@ -1782,13 +1871,22 @@ namespace Test_Automation
                     data = result.Data
                 })
                 .ToList();
-
-            PreviewRequest = JsonSerializer.Serialize(new
+            if (genericRuns.Count > 0)
             {
-                component = nodeName,
-                type = nodeType,
-                settings
-            }, new JsonSerializerOptions { WriteIndented = true });
+                PreviewRequest = JsonSerializer.Serialize(new
+                {
+                    runs = genericRuns
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+            else
+            {
+                PreviewRequest = JsonSerializer.Serialize(new
+                {
+                    component = nodeName,
+                    type = nodeType,
+                    settings
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
 
             if (genericRuns.Count > 0)
             {
@@ -1891,10 +1989,10 @@ namespace Test_Automation
                 return;
             }
 
-            var descendantNames = GetDescendantNames(SelectedNode)
+            var descendantIds = GetDescendantIds(SelectedNode)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            _lastExecutionContext.Results.RemoveAll(result => descendantNames.Contains(result.ComponentName));
+            _lastExecutionContext.Results.RemoveAll(result => descendantIds.Contains(result.ComponentId));
             RefreshComponentPreview();
         }
 
@@ -1905,15 +2003,15 @@ namespace Test_Automation
                 return;
             }
 
-            var namesToClear = GetDescendantNames(selectedNode)
-                .Concat(new[] { selectedNode.Name })
+            var idsToClear = GetDescendantIds(selectedNode)
+                .Concat(new[] { selectedNode.Id })
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            _lastExecutionContext.Results.RemoveAll(result => namesToClear.Contains(result.ComponentName));
+            _lastExecutionContext.Results.RemoveAll(result => idsToClear.Contains(result.ComponentId));
             RefreshComponentPreview();
         }
 
-        private TData? GetLastExecutionData<TData>(string componentName) where TData : ComponentData
+        private TData? GetLastExecutionData<TData>(string componentId) where TData : ComponentData
         {
             if (_lastExecutionContext == null)
             {
@@ -1921,13 +2019,13 @@ namespace Test_Automation
             }
 
             return _lastExecutionContext.Results
-                .Where(result => result.Data is TData && string.Equals(result.ComponentName, componentName, StringComparison.OrdinalIgnoreCase))
+                .Where(result => result.Data is TData && string.Equals(result.ComponentId, componentId, StringComparison.OrdinalIgnoreCase))
                 .Select(result => result.Data)
                 .OfType<TData>()
                 .LastOrDefault();
         }
 
-        private List<ExecutionResult> GetExecutionResults(string componentName)
+        private List<ExecutionResult> GetExecutionResults(string componentId)
         {
             if (_lastExecutionContext == null)
             {
@@ -1935,7 +2033,7 @@ namespace Test_Automation
             }
 
             return _lastExecutionContext.Results
-                .Where(result => string.Equals(result.ComponentName, componentName, StringComparison.OrdinalIgnoreCase))
+                .Where(result => string.Equals(result.ComponentId, componentId, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(result => result.ThreadIndex)
                 .ThenBy(result => result.StartTime)
                 .ToList();
@@ -1947,6 +2045,18 @@ namespace Test_Automation
             {
                 yield return child.Name;
                 foreach (var descendant in GetDescendantNames(child))
+                {
+                    yield return descendant;
+                }
+            }
+        }
+
+        private static IEnumerable<string> GetDescendantIds(PlanNode node)
+        {
+            foreach (var child in node.Children)
+            {
+                yield return child.Id;
+                foreach (var descendant in GetDescendantIds(child))
                 {
                     yield return descendant;
                 }
