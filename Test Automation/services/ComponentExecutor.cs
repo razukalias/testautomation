@@ -16,6 +16,9 @@ namespace Test_Automation.Services
         private static readonly System.Threading.AsyncLocal<int?> CurrentThreadIndex = new System.Threading.AsyncLocal<int?>();
         private static readonly System.Threading.AsyncLocal<string?> CurrentThreadGroupId = new System.Threading.AsyncLocal<string?>();
 
+        public event Action<ExecutionResult>? ComponentStarted;
+        public event Action<ExecutionResult>? ComponentCompleted;
+
         public async Task<ExecutionResult> ExecuteComponent(Component component, Test_Automation.Models.ExecutionContext context)
         {
             if (component == null || context == null)
@@ -30,6 +33,8 @@ namespace Test_Automation.Services
                 ThreadGroupId = CurrentThreadGroupId.Value ?? string.Empty
             };
 
+            ComponentStarted?.Invoke(result);
+
             try
             {
                 // Execute the component
@@ -43,6 +48,10 @@ namespace Test_Automation.Services
             {
                 result.Error = ex.Message;
                 result.MarkAsCompleted(false);
+            }
+            finally
+            {
+                ComponentCompleted?.Invoke(result);
             }
 
             return result;

@@ -61,6 +61,12 @@
                             <EventSetter Event="DragLeave" Handler="TreeViewItem_DragLeave" />
                             <EventSetter Event="DragOver" Handler="TreeViewItem_DragOver" />
                             <EventSetter Event="Drop" Handler="TreeViewItem_Drop" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                    <Setter Property="Background" Value="#FFFFC107" />
+                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                </DataTrigger>
+                            </Style.Triggers>
                         </Style>
                     </TreeView.ItemContainerStyle>
                     <TreeView.ItemTemplate>

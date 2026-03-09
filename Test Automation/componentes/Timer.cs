@@ -16,9 +16,27 @@ namespace Test_Automation.Componentes
 
         public override Task<ComponentData> Execute(Test_Automation.Models.ExecutionContext context)
         {
-            // Timer component logic
+            return ExecuteTimerAsync();
+        }
+
+        private async Task<ComponentData> ExecuteTimerAsync()
+        {
             var data = new TimerData { Id = this.Id, ComponentName = this.Name };
-            return Task.FromResult<ComponentData>(data);
+
+            var delayMs = 0;
+            if (Settings.TryGetValue("DelayMs", out var delayValue))
+            {
+                int.TryParse(delayValue, out delayMs);
+            }
+
+            if (delayMs > 0)
+            {
+                await Task.Delay(delayMs);
+            }
+
+            data.DelayMs = delayMs;
+            data.Executed = true;
+            return data;
         }
     }
 }

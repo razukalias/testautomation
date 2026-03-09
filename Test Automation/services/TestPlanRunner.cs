@@ -18,6 +18,11 @@ namespace Test_Automation.Services
             _executor = new ComponentExecutor();
         }
 
+        public TestPlanRunner(ComponentExecutor executor)
+        {
+            _executor = executor ?? new ComponentExecutor();
+        }
+
         public async Task<ExecutionSummary> RunTestPlan(TestPlan testPlan)
         {
             if (testPlan == null)

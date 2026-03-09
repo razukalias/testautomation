@@ -144,6 +144,7 @@ namespace Test_Automation
         private string _name;
         private bool _isEnabled;
         private bool _isExpanded;
+        private bool _isHighlighted;
 
         public string Name
         {
@@ -179,6 +180,17 @@ namespace Test_Automation
             }
         }
 
+        public bool IsHighlighted
+        {
+            get => _isHighlighted;
+            set
+            {
+                if (_isHighlighted == value) return;
+                _isHighlighted = value;
+                OnPropertyChanged();
+            }
+        }
+
         public PlanNode? Parent { get; set; }
         public ObservableCollection<PlanNode> Children { get; } = new ObservableCollection<PlanNode>();
         public ObservableCollection<NodeSetting> Settings { get; } = new ObservableCollection<NodeSetting>();
@@ -193,6 +205,7 @@ namespace Test_Automation
             _name = name;
             _isEnabled = true;
             _isExpanded = true;
+            _isHighlighted = false;
             ApplyDefaultSettings(type);
         }
 
@@ -866,7 +879,8 @@ namespace Test_Automation
                 return;
             }
 
-            var runner = new TestPlanRunner();
+            var executor = CreateExecutorWithHighlight();
+            var runner = new TestPlanRunner(executor);
             var startTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
             PreviewLogs = $"[{startTimestamp}] Running TestPlan: {testPlanNode.Name}";
             VariablesPreview = "{}";
@@ -998,7 +1012,7 @@ namespace Test_Automation
                 return;
             }
 
-            var executor = new Test_Automation.Services.ComponentExecutor();
+            var executor = CreateExecutorWithHighlight();
             var startTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
             PreviewLogs = $"[{startTimestamp}] Running: {selectedNode.Name}";
             VariablesPreview = "{}";
@@ -1035,6 +1049,66 @@ namespace Test_Automation
                 });
                 VariablesPreview = "{}";
             }
+        }
+
+        private ComponentExecutor CreateExecutorWithHighlight()
+        {
+            var executor = new ComponentExecutor();
+            executor.ComponentStarted += result => _ = SetNodeHighlightAsync(result.ComponentId, true);
+            executor.ComponentCompleted += result => _ = SetNodeHighlightAsync(result.ComponentId, false);
+            return executor;
+        }
+
+        private async Task SetNodeHighlightAsync(string componentId, bool isHighlighted)
+        {
+            if (string.IsNullOrWhiteSpace(componentId))
+            {
+                return;
+            }
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                var node = FindNodeById(componentId);
+                if (node == null)
+                {
+                    return;
+                }
+
+                node.IsHighlighted = isHighlighted;
+            });
+        }
+
+        private PlanNode? FindNodeById(string componentId)
+        {
+            foreach (var root in RootNodes)
+            {
+                var match = FindNodeById(root, componentId);
+                if (match != null)
+                {
+                    return match;
+                }
+            }
+
+            return null;
+        }
+
+        private static PlanNode? FindNodeById(PlanNode node, string componentId)
+        {
+            if (string.Equals(node.Id, componentId, StringComparison.OrdinalIgnoreCase))
+            {
+                return node;
+            }
+
+            foreach (var child in node.Children)
+            {
+                var match = FindNodeById(child, componentId);
+                if (match != null)
+                {
+                    return match;
+                }
+            }
+
+            return null;
         }
 
         private Test_Automation.Componentes.Component? BuildComponentTree(PlanNode node)
