@@ -1245,7 +1245,8 @@ namespace Test_Automation
             }
 
             var canReorder = CanReorder(sourceNode, targetNode);
-            e.Effects = canReorder ? DragDropEffects.Move : DragDropEffects.None;
+            var canMove = CanMoveToParent(sourceNode, targetNode) || CanMoveToSiblingParent(sourceNode, targetNode);
+            e.Effects = (canReorder || canMove) ? DragDropEffects.Move : DragDropEffects.None;
             e.Handled = true;
         }
 
@@ -1259,6 +1260,20 @@ namespace Test_Automation
 
             if (!CanReorder(sourceNode, targetNode))
             {
+                if (TryMoveToParent(sourceNode, targetNode))
+                {
+                    e.Handled = true;
+                    RefreshJsonPreview();
+                    return;
+                }
+
+                if (TryMoveToSiblingParent(sourceNode, targetNode))
+                {
+                    e.Handled = true;
+                    RefreshJsonPreview();
+                    return;
+                }
+
                 e.Handled = true;
                 return;
             }
@@ -1314,6 +1329,105 @@ namespace Test_Automation
             }
 
             return ReferenceEquals(sourceNode.Parent, targetNode.Parent);
+        }
+
+        private bool CanMoveToParent(PlanNode sourceNode, PlanNode targetNode)
+        {
+            if (ReferenceEquals(sourceNode, targetNode))
+            {
+                return false;
+            }
+
+            if (!CanAcceptChild(targetNode, sourceNode))
+            {
+                return false;
+            }
+
+            return !IsDescendant(targetNode, sourceNode);
+        }
+
+        private bool CanMoveToSiblingParent(PlanNode sourceNode, PlanNode targetNode)
+        {
+            if (targetNode.Parent == null)
+            {
+                return false;
+            }
+
+            if (!CanAcceptChild(targetNode.Parent, sourceNode))
+            {
+                return false;
+            }
+
+            return !IsDescendant(targetNode.Parent, sourceNode);
+        }
+
+        private bool TryMoveToParent(PlanNode sourceNode, PlanNode targetNode)
+        {
+            if (!CanMoveToParent(sourceNode, targetNode))
+            {
+                return false;
+            }
+
+            RemoveFromParent(sourceNode);
+            sourceNode.Parent = targetNode;
+            targetNode.Children.Add(sourceNode);
+            return true;
+        }
+
+        private bool TryMoveToSiblingParent(PlanNode sourceNode, PlanNode targetNode)
+        {
+            var newParent = targetNode.Parent;
+            if (newParent == null || !CanMoveToSiblingParent(sourceNode, targetNode))
+            {
+                return false;
+            }
+
+            RemoveFromParent(sourceNode);
+            sourceNode.Parent = newParent;
+            var insertIndex = newParent.Children.IndexOf(targetNode);
+            if (insertIndex < 0)
+            {
+                newParent.Children.Add(sourceNode);
+            }
+            else
+            {
+                newParent.Children.Insert(insertIndex, sourceNode);
+            }
+
+            return true;
+        }
+
+        private void RemoveFromParent(PlanNode node)
+        {
+            if (node.Parent == null)
+            {
+                RootNodes.Remove(node);
+                return;
+            }
+
+            node.Parent.Children.Remove(node);
+        }
+
+        private static bool CanAcceptChild(PlanNode parent, PlanNode child)
+        {
+            return GetAllowedChildren(parent.Type)
+                .Any(type => string.Equals(type, child.Type, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool IsDescendant(PlanNode potentialChild, PlanNode potentialAncestor)
+        {
+            var current = potentialChild.Parent;
+            while (current != null)
+            {
+                if (ReferenceEquals(current, potentialAncestor))
+                {
+                    return true;
+                }
+
+                current = current.Parent;
+            }
+
+            return false;
         }
 
         private PlanNode? GetNodeAtPosition(Point position)
