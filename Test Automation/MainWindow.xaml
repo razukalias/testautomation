@@ -56,6 +56,11 @@
                     <TreeView.ItemContainerStyle>
                         <Style TargetType="TreeViewItem">
                             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                            <Setter Property="AllowDrop" Value="True" />
+                            <EventSetter Event="DragEnter" Handler="TreeViewItem_DragEnter" />
+                            <EventSetter Event="DragLeave" Handler="TreeViewItem_DragLeave" />
+                            <EventSetter Event="DragOver" Handler="TreeViewItem_DragOver" />
+                            <EventSetter Event="Drop" Handler="TreeViewItem_Drop" />
                         </Style>
                     </TreeView.ItemContainerStyle>
                     <TreeView.ItemTemplate>

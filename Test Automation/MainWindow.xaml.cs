@@ -1293,6 +1293,80 @@ namespace Test_Automation
             RefreshJsonPreview();
         }
 
+        private void TreeViewItem_DragEnter(object sender, DragEventArgs e)
+        {
+            UpdateDragOverVisual(sender, e, true);
+        }
+
+        private void TreeViewItem_DragOver(object sender, DragEventArgs e)
+        {
+            UpdateDragOverVisual(sender, e, false);
+        }
+
+        private void TreeViewItem_DragLeave(object sender, DragEventArgs e)
+        {
+            if (sender is TreeViewItem item)
+            {
+                item.ClearValue(Control.BackgroundProperty);
+            }
+        }
+
+        private void TreeViewItem_Drop(object sender, DragEventArgs e)
+        {
+            if (sender is TreeViewItem item)
+            {
+                item.ClearValue(Control.BackgroundProperty);
+            }
+        }
+
+        private void UpdateDragOverVisual(object sender, DragEventArgs e, bool autoExpand)
+        {
+            if (sender is not TreeViewItem item)
+            {
+                return;
+            }
+
+            if (item.DataContext is not PlanNode targetNode)
+            {
+                return;
+            }
+
+            if (!TryGetDragSource(e, out var sourceNode))
+            {
+                item.ClearValue(Control.BackgroundProperty);
+                return;
+            }
+
+            var canReorder = CanReorder(sourceNode, targetNode);
+            var canMove = CanMoveToParent(sourceNode, targetNode) || CanMoveToSiblingParent(sourceNode, targetNode);
+
+            if (canReorder || canMove)
+            {
+                item.Background = Brushes.LightGreen;
+                if (autoExpand && !item.IsExpanded)
+                {
+                    item.IsExpanded = true;
+                }
+            }
+            else
+            {
+                item.Background = Brushes.LightCoral;
+            }
+        }
+
+        private bool TryGetDragSource(DragEventArgs e, out PlanNode sourceNode)
+        {
+            sourceNode = null!;
+
+            if (!e.Data.GetDataPresent(typeof(PlanNode)))
+            {
+                return false;
+            }
+
+            sourceNode = e.Data.GetData(typeof(PlanNode)) as PlanNode ?? null!;
+            return sourceNode != null;
+        }
+
         private bool TryGetDragNodes(DragEventArgs e, out PlanNode sourceNode, out PlanNode targetNode)
         {
             sourceNode = null!;
