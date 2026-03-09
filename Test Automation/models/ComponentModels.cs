@@ -10,10 +10,10 @@ namespace Test_Automation.Models
     public class ComponentData
     {
         [JsonPropertyName("id")]
-        public string Id { get; set; }
+        public string Id { get; set; } = string.Empty;
 
         [JsonPropertyName("componentName")]
-        public string ComponentName { get; set; }
+        public string ComponentName { get; set; } = string.Empty;
 
         [JsonPropertyName("properties")]
         public Dictionary<string, object> Properties { get; set; } = new Dictionary<string, object>();
@@ -28,7 +28,7 @@ namespace Test_Automation.Models
     public class HttpData : ComponentData
     {
         [JsonPropertyName("url")]
-        public string Url { get; set; }
+        public string Url { get; set; } = string.Empty;
 
         [JsonPropertyName("method")]
         public string Method { get; set; } = "GET";
@@ -37,13 +37,13 @@ namespace Test_Automation.Models
         public Dictionary<string, string> Headers { get; set; } = new Dictionary<string, string>();
 
         [JsonPropertyName("body")]
-        public string Body { get; set; }
+        public string Body { get; set; } = string.Empty;
 
         [JsonPropertyName("responseStatus")]
         public int? ResponseStatus { get; set; }
 
         [JsonPropertyName("responseBody")]
-        public string ResponseBody { get; set; }
+        public string ResponseBody { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -52,19 +52,22 @@ namespace Test_Automation.Models
     public class GraphQlData : ComponentData
     {
         [JsonPropertyName("endpoint")]
-        public string Endpoint { get; set; }
+        public string Endpoint { get; set; } = string.Empty;
 
         [JsonPropertyName("query")]
-        public string Query { get; set; }
+        public string Query { get; set; } = string.Empty;
 
         [JsonPropertyName("variables")]
         public string Variables { get; set; } = "{}";
+
+        [JsonPropertyName("headers")]
+        public Dictionary<string, string> Headers { get; set; } = new Dictionary<string, string>();
 
         [JsonPropertyName("responseStatus")]
         public int? ResponseStatus { get; set; }
 
         [JsonPropertyName("responseBody")]
-        public string ResponseBody { get; set; }
+        public string ResponseBody { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -73,10 +76,10 @@ namespace Test_Automation.Models
     public class SqlData : ComponentData
     {
         [JsonPropertyName("connectionString")]
-        public string ConnectionString { get; set; }
+        public string ConnectionString { get; set; } = string.Empty;
 
         [JsonPropertyName("query")]
-        public string Query { get; set; }
+        public string Query { get; set; } = string.Empty;
 
         [JsonPropertyName("queryResult")]
         public List<Dictionary<string, object>> QueryResult { get; set; } = new List<Dictionary<string, object>>();
@@ -88,7 +91,7 @@ namespace Test_Automation.Models
     public class DatasetData : ComponentData
     {
         [JsonPropertyName("dataSource")]
-        public string DataSource { get; set; }
+        public string DataSource { get; set; } = string.Empty;
 
         [JsonPropertyName("rows")]
         public List<Dictionary<string, object>> Rows { get; set; } = new List<Dictionary<string, object>>();
@@ -103,10 +106,10 @@ namespace Test_Automation.Models
     public class AssertData : ComponentData
     {
         [JsonPropertyName("expectedValue")]
-        public object ExpectedValue { get; set; }
+        public object? ExpectedValue { get; set; }
 
         [JsonPropertyName("actualValue")]
-        public object ActualValue { get; set; }
+        public object? ActualValue { get; set; }
 
         [JsonPropertyName("operator")]
         public string Operator { get; set; } = "equals";
@@ -115,7 +118,7 @@ namespace Test_Automation.Models
         public bool Passed { get; set; }
 
         [JsonPropertyName("errorMessage")]
-        public string ErrorMessage { get; set; }
+        public string ErrorMessage { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -124,16 +127,16 @@ namespace Test_Automation.Models
     public class VariableExtractorData : ComponentData
     {
         [JsonPropertyName("source")]
-        public string Source { get; set; }
+        public string Source { get; set; } = string.Empty;
 
         [JsonPropertyName("pattern")]
-        public string Pattern { get; set; }
+        public string Pattern { get; set; } = string.Empty;
 
         [JsonPropertyName("variableName")]
-        public string VariableName { get; set; }
+        public string VariableName { get; set; } = string.Empty;
 
         [JsonPropertyName("extractedValue")]
-        public string ExtractedValue { get; set; }
+        public string ExtractedValue { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -154,13 +157,13 @@ namespace Test_Automation.Models
     public class ScriptData : ComponentData
     {
         [JsonPropertyName("scriptCode")]
-        public string ScriptCode { get; set; }
+        public string ScriptCode { get; set; } = string.Empty;
 
         [JsonPropertyName("scriptLanguage")]
         public string ScriptLanguage { get; set; } = "csharp";
 
         [JsonPropertyName("executionResult")]
-        public string ExecutionResult { get; set; }
+        public string ExecutionResult { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -199,7 +202,7 @@ namespace Test_Automation.Models
     public class IfData : ComponentData
     {
         [JsonPropertyName("condition")]
-        public string Condition { get; set; }
+        public string Condition { get; set; } = string.Empty;
 
         [JsonPropertyName("conditionMet")]
         public bool ConditionMet { get; set; }
@@ -226,10 +229,10 @@ namespace Test_Automation.Models
     public class TestPlanData : ComponentData
     {
         [JsonPropertyName("testPlanName")]
-        public string TestPlanName { get; set; }
+        public string TestPlanName { get; set; } = string.Empty;
 
         [JsonPropertyName("description")]
-        public string Description { get; set; }
+        public string Description { get; set; } = string.Empty;
 
         [JsonPropertyName("components")]
         public List<string> Components { get; set; } = new List<string>();

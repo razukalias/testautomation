@@ -10,9 +10,11 @@ namespace Test_Automation.Componentes
     public class Component
     {
         public string Id { get; private set; }
-        public string Name { get; protected set; }
-        public Component Parent { get; set; }
+        public string Name { get; protected set; } = string.Empty;
+        public Component? Parent { get; set; }
         public List<Component> Children { get; set; } = new List<Component>();
+        public Dictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
+        public List<Test_Automation.VariableExtractionRule> Extractors { get; set; } = new List<Test_Automation.VariableExtractionRule>();
 
         protected Component()
         {
@@ -21,7 +23,19 @@ namespace Test_Automation.Componentes
 
         public virtual Task<ComponentData> Execute(Test_Automation.Models.ExecutionContext context)
         {
-            return Task.FromResult<ComponentData>(null);
+            return Task.FromResult<ComponentData>(new ComponentData
+            {
+                Id = Id,
+                ComponentName = Name
+            });
+        }
+
+        public void SetName(string name)
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                Name = name;
+            }
         }
 
         public void AddChild(Component child)

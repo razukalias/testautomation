@@ -10,6 +10,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Test_Automation.Factories;
+using Test_Automation.Models;
+using Test_Automation.Services;
 
 namespace Test_Automation
 {
@@ -25,7 +28,15 @@ namespace Test_Automation
         public string Name { get; set; } = string.Empty;
         public bool Enabled { get; set; }
         public Dictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
+        public List<VariableExtractionFileModel> Extractors { get; set; } = new List<VariableExtractionFileModel>();
         public List<NodeFileModel> Children { get; set; } = new List<NodeFileModel>();
+    }
+
+    public class VariableExtractionFileModel
+    {
+        public string Source { get; set; } = string.Empty;
+        public string JsonPath { get; set; } = string.Empty;
+        public string VariableName { get; set; } = string.Empty;
     }
 
     public class NodeSetting : INotifyPropertyChanged
@@ -69,12 +80,67 @@ namespace Test_Automation
         }
     }
 
+    public class VariableExtractionRule : INotifyPropertyChanged
+    {
+        private string _source;
+        private string _jsonPath;
+        private string _variableName;
+
+        public string Source
+        {
+            get => _source;
+            set
+            {
+                if (_source == value) return;
+                _source = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string JsonPath
+        {
+            get => _jsonPath;
+            set
+            {
+                if (_jsonPath == value) return;
+                _jsonPath = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string VariableName
+        {
+            get => _variableName;
+            set
+            {
+                if (_variableName == value) return;
+                _variableName = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public VariableExtractionRule(string source, string jsonPath, string variableName)
+        {
+            _source = source;
+            _jsonPath = jsonPath;
+            _variableName = variableName;
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+
     public class PlanNode : INotifyPropertyChanged
     {
         public string Type { get; }
 
         private string _name;
         private bool _isEnabled;
+        private bool _isExpanded;
 
         public string Name
         {
@@ -99,9 +165,21 @@ namespace Test_Automation
             }
         }
 
+        public bool IsExpanded
+        {
+            get => _isExpanded;
+            set
+            {
+                if (_isExpanded == value) return;
+                _isExpanded = value;
+                OnPropertyChanged();
+            }
+        }
+
         public PlanNode? Parent { get; set; }
         public ObservableCollection<PlanNode> Children { get; } = new ObservableCollection<PlanNode>();
         public ObservableCollection<NodeSetting> Settings { get; } = new ObservableCollection<NodeSetting>();
+        public ObservableCollection<VariableExtractionRule> Extractors { get; } = new ObservableCollection<VariableExtractionRule>();
 
         public string DisplayName => $"{Type}: {Name}";
 
@@ -110,6 +188,7 @@ namespace Test_Automation
             Type = type;
             _name = name;
             _isEnabled = true;
+            _isExpanded = true;
             ApplyDefaultSettings(type);
         }
 
@@ -119,17 +198,45 @@ namespace Test_Automation
             {
                 Settings.Add(new NodeSetting("Method", "GET"));
                 Settings.Add(new NodeSetting("Url", "https://api.example.com"));
+                Settings.Add(new NodeSetting("Body", ""));
+                Settings.Add(new NodeSetting("Headers", "{}"));
+                Settings.Add(new NodeSetting("AuthType", "WindowsIntegrated"));
+                Settings.Add(new NodeSetting("AuthUsername", ""));
+                Settings.Add(new NodeSetting("AuthPassword", ""));
+                Settings.Add(new NodeSetting("AuthToken", ""));
+                Settings.Add(new NodeSetting("ApiKeyName", ""));
+                Settings.Add(new NodeSetting("ApiKeyValue", ""));
+                Settings.Add(new NodeSetting("ApiKeyLocation", "Header"));
+                Settings.Add(new NodeSetting("OAuthTokenUrl", ""));
+                Settings.Add(new NodeSetting("OAuthClientId", ""));
+                Settings.Add(new NodeSetting("OAuthClientSecret", ""));
+                Settings.Add(new NodeSetting("OAuthScope", ""));
             }
             else if (type == "GraphQl")
             {
                 Settings.Add(new NodeSetting("Endpoint", "https://api.example.com/graphql"));
                 Settings.Add(new NodeSetting("Query", "query { health }"));
                 Settings.Add(new NodeSetting("Variables", "{}"));
+                Settings.Add(new NodeSetting("Headers", "{}"));
+                Settings.Add(new NodeSetting("AuthType", "WindowsIntegrated"));
+                Settings.Add(new NodeSetting("AuthUsername", ""));
+                Settings.Add(new NodeSetting("AuthPassword", ""));
+                Settings.Add(new NodeSetting("AuthToken", ""));
+                Settings.Add(new NodeSetting("ApiKeyName", ""));
+                Settings.Add(new NodeSetting("ApiKeyValue", ""));
+                Settings.Add(new NodeSetting("ApiKeyLocation", "Header"));
+                Settings.Add(new NodeSetting("OAuthTokenUrl", ""));
+                Settings.Add(new NodeSetting("OAuthClientId", ""));
+                Settings.Add(new NodeSetting("OAuthClientSecret", ""));
+                Settings.Add(new NodeSetting("OAuthScope", ""));
             }
             else if (type == "Sql")
             {
                 Settings.Add(new NodeSetting("Connection", ""));
                 Settings.Add(new NodeSetting("Query", "SELECT 1"));
+                Settings.Add(new NodeSetting("AuthType", "WindowsIntegrated"));
+                Settings.Add(new NodeSetting("AuthUsername", ""));
+                Settings.Add(new NodeSetting("AuthPassword", ""));
             }
             else if (type == "Timer")
             {
@@ -193,12 +300,41 @@ namespace Test_Automation
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         public ObservableCollection<PlanNode> RootNodes { get; } = new ObservableCollection<PlanNode>();
+        public ObservableCollection<string> ExtractorSourceOptions { get; } = new ObservableCollection<string>();
+        private static readonly string[] BaseExtractorSources =
+        {
+            "PreviewRequest",
+            "PreviewResponse",
+            "PreviewLogs"
+        };
+        public ObservableCollection<string> AuthTypeOptions { get; } = new ObservableCollection<string>
+        {
+            "WindowsIntegrated",
+            "None",
+            "Basic",
+            "Bearer",
+            "ApiKey",
+            "OAuth2"
+        };
+
+        public ObservableCollection<string> HttpMethodOptions { get; } = new ObservableCollection<string>
+        {
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "HEAD",
+            "OPTIONS"
+        };
 
         private PlanNode? _selectedNode;
         private string _jsonPreview = "{}";
         private string _previewRequest = "Select a component to see request preview.";
         private string _previewResponse = "Select a component to see response preview.";
         private string _previewLogs = "Logs will appear here.";
+        private string _variablesPreview = "{}";
+        private Test_Automation.Models.ExecutionContext? _lastExecutionContext;
 
         public PlanNode? SelectedNode
         {
@@ -209,6 +345,7 @@ namespace Test_Automation
                 _selectedNode = value;
                 OnPropertyChanged();
                 NotifySelectedNodeEditorProperties();
+                RebuildExtractorSourceOptions();
                 RefreshComponentPreview();
             }
         }
@@ -257,7 +394,19 @@ namespace Test_Automation
             }
         }
 
+        public string VariablesPreview
+        {
+            get => _variablesPreview;
+            set
+            {
+                if (_variablesPreview == value) return;
+                _variablesPreview = value;
+                OnPropertyChanged();
+            }
+        }
+
         public bool IsProjectSelected => SelectedNode?.Type == "Project";
+        public bool IsComponentSelected => SelectedNode != null && SelectedNode.Type != "Project";
         public bool IsHttpSelected => SelectedNode?.Type == "Http";
         public bool IsGraphQlSelected => SelectedNode?.Type == "GraphQl";
         public bool IsSqlSelected => SelectedNode?.Type == "Sql";
@@ -293,6 +442,93 @@ namespace Test_Automation
             set => SetSettingValue("Url", value);
         }
 
+        public string HttpBody
+        {
+            get => GetSettingValue("Body", string.Empty);
+            set => SetSettingValue("Body", value);
+        }
+
+        public string HttpHeaders
+        {
+            get => GetSettingValue("Headers", "{}");
+            set => SetSettingValue("Headers", value);
+        }
+
+        public string HttpAuthType
+        {
+            get => GetSettingValue("AuthType", "WindowsIntegrated");
+            set
+            {
+                SetSettingValue("AuthType", value);
+                RaiseHttpAuthVisibilityChanged();
+            }
+        }
+
+        public bool HttpShowBasicFields => string.Equals(HttpAuthType, "Basic", StringComparison.OrdinalIgnoreCase);
+        public bool HttpShowBearerFields => string.Equals(HttpAuthType, "Bearer", StringComparison.OrdinalIgnoreCase);
+        public bool HttpShowApiKeyFields => string.Equals(HttpAuthType, "ApiKey", StringComparison.OrdinalIgnoreCase);
+        public bool HttpShowOAuthFields => string.Equals(HttpAuthType, "OAuth2", StringComparison.OrdinalIgnoreCase);
+
+        public string HttpAuthUsername
+        {
+            get => GetSettingValue("AuthUsername", string.Empty);
+            set => SetSettingValue("AuthUsername", value);
+        }
+
+        public string HttpAuthPassword
+        {
+            get => GetSettingValue("AuthPassword", string.Empty);
+            set => SetSettingValue("AuthPassword", value);
+        }
+
+        public string HttpAuthToken
+        {
+            get => GetSettingValue("AuthToken", string.Empty);
+            set => SetSettingValue("AuthToken", value);
+        }
+
+        public string HttpApiKeyName
+        {
+            get => GetSettingValue("ApiKeyName", string.Empty);
+            set => SetSettingValue("ApiKeyName", value);
+        }
+
+        public string HttpApiKeyValue
+        {
+            get => GetSettingValue("ApiKeyValue", string.Empty);
+            set => SetSettingValue("ApiKeyValue", value);
+        }
+
+        public string HttpApiKeyLocation
+        {
+            get => GetSettingValue("ApiKeyLocation", "Header");
+            set => SetSettingValue("ApiKeyLocation", value);
+        }
+
+        public string HttpOAuthTokenUrl
+        {
+            get => GetSettingValue("OAuthTokenUrl", string.Empty);
+            set => SetSettingValue("OAuthTokenUrl", value);
+        }
+
+        public string HttpOAuthClientId
+        {
+            get => GetSettingValue("OAuthClientId", string.Empty);
+            set => SetSettingValue("OAuthClientId", value);
+        }
+
+        public string HttpOAuthClientSecret
+        {
+            get => GetSettingValue("OAuthClientSecret", string.Empty);
+            set => SetSettingValue("OAuthClientSecret", value);
+        }
+
+        public string HttpOAuthScope
+        {
+            get => GetSettingValue("OAuthScope", string.Empty);
+            set => SetSettingValue("OAuthScope", value);
+        }
+
         public string GraphQlEndpoint
         {
             get => GetSettingValue("Endpoint", "https://api.example.com/graphql");
@@ -311,6 +547,87 @@ namespace Test_Automation
             set => SetSettingValue("Variables", value);
         }
 
+        public string GraphQlHeaders
+        {
+            get => GetSettingValue("Headers", "{}");
+            set => SetSettingValue("Headers", value);
+        }
+
+        public string GraphQlAuthType
+        {
+            get => GetSettingValue("AuthType", "WindowsIntegrated");
+            set
+            {
+                SetSettingValue("AuthType", value);
+                RaiseGraphQlAuthVisibilityChanged();
+            }
+        }
+
+        public bool GraphQlShowBasicFields => string.Equals(GraphQlAuthType, "Basic", StringComparison.OrdinalIgnoreCase);
+        public bool GraphQlShowBearerFields => string.Equals(GraphQlAuthType, "Bearer", StringComparison.OrdinalIgnoreCase);
+        public bool GraphQlShowApiKeyFields => string.Equals(GraphQlAuthType, "ApiKey", StringComparison.OrdinalIgnoreCase);
+        public bool GraphQlShowOAuthFields => string.Equals(GraphQlAuthType, "OAuth2", StringComparison.OrdinalIgnoreCase);
+
+        public string GraphQlAuthUsername
+        {
+            get => GetSettingValue("AuthUsername", string.Empty);
+            set => SetSettingValue("AuthUsername", value);
+        }
+
+        public string GraphQlAuthPassword
+        {
+            get => GetSettingValue("AuthPassword", string.Empty);
+            set => SetSettingValue("AuthPassword", value);
+        }
+
+        public string GraphQlAuthToken
+        {
+            get => GetSettingValue("AuthToken", string.Empty);
+            set => SetSettingValue("AuthToken", value);
+        }
+
+        public string GraphQlApiKeyName
+        {
+            get => GetSettingValue("ApiKeyName", string.Empty);
+            set => SetSettingValue("ApiKeyName", value);
+        }
+
+        public string GraphQlApiKeyValue
+        {
+            get => GetSettingValue("ApiKeyValue", string.Empty);
+            set => SetSettingValue("ApiKeyValue", value);
+        }
+
+        public string GraphQlApiKeyLocation
+        {
+            get => GetSettingValue("ApiKeyLocation", "Header");
+            set => SetSettingValue("ApiKeyLocation", value);
+        }
+
+        public string GraphQlOAuthTokenUrl
+        {
+            get => GetSettingValue("OAuthTokenUrl", string.Empty);
+            set => SetSettingValue("OAuthTokenUrl", value);
+        }
+
+        public string GraphQlOAuthClientId
+        {
+            get => GetSettingValue("OAuthClientId", string.Empty);
+            set => SetSettingValue("OAuthClientId", value);
+        }
+
+        public string GraphQlOAuthClientSecret
+        {
+            get => GetSettingValue("OAuthClientSecret", string.Empty);
+            set => SetSettingValue("OAuthClientSecret", value);
+        }
+
+        public string GraphQlOAuthScope
+        {
+            get => GetSettingValue("OAuthScope", string.Empty);
+            set => SetSettingValue("OAuthScope", value);
+        }
+
         public string SqlConnection
         {
             get => GetSettingValue("Connection", string.Empty);
@@ -321,6 +638,30 @@ namespace Test_Automation
         {
             get => GetSettingValue("Query", string.Empty);
             set => SetSettingValue("Query", value);
+        }
+
+        public string SqlAuthType
+        {
+            get => GetSettingValue("AuthType", "WindowsIntegrated");
+            set
+            {
+                SetSettingValue("AuthType", value);
+                RaiseSqlAuthVisibilityChanged();
+            }
+        }
+
+        public bool SqlShowBasicFields => string.Equals(SqlAuthType, "Basic", StringComparison.OrdinalIgnoreCase);
+
+        public string SqlAuthUsername
+        {
+            get => GetSettingValue("AuthUsername", string.Empty);
+            set => SetSettingValue("AuthUsername", value);
+        }
+
+        public string SqlAuthPassword
+        {
+            get => GetSettingValue("AuthPassword", string.Empty);
+            set => SetSettingValue("AuthPassword", value);
         }
 
         public string TimerDelayMs
@@ -497,6 +838,59 @@ namespace Test_Automation
             }
         }
 
+        private async void RunTestPlanButton_Click(object sender, RoutedEventArgs e)
+        {
+            var testPlanNode = ResolveTestPlanNode();
+            if (testPlanNode == null)
+            {
+                MessageBox.Show("Select a TestPlan node to run.", "Run TestPlan", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var testPlanComponent = BuildComponentTree(testPlanNode) as Test_Automation.Componentes.TestPlan;
+            if (testPlanComponent == null)
+            {
+                MessageBox.Show("Unable to build the TestPlan component.", "Run TestPlan", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var runner = new TestPlanRunner();
+            var startTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            PreviewLogs = $"[{startTimestamp}] Running TestPlan: {testPlanNode.Name}";
+            VariablesPreview = "{}";
+
+            try
+            {
+                var context = new Test_Automation.Models.ExecutionContext();
+                var summary = await runner.RunTestPlanWithContext(testPlanComponent, context);
+                var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                PreviewLogs = string.Join("\n", new[]
+                {
+                    PreviewLogs,
+                    $"[{endTimestamp}] Status: {summary.Status}",
+                    $"[{endTimestamp}] Total: {summary.TotalComponents}, Passed: {summary.PassedComponents}, Failed: {summary.FailedComponents}"
+                });
+
+                _lastExecutionContext = context;
+                VariablesPreview = JsonSerializer.Serialize(context.Variables, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+
+                RefreshComponentPreview();
+            }
+            catch (Exception ex)
+            {
+                var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                PreviewLogs = string.Join("\n", new[]
+                {
+                    PreviewLogs,
+                    $"[{endTimestamp}] Run failed: {ex.Message}"
+                });
+                VariablesPreview = "{}";
+            }
+        }
+
         private void PlanTreeView_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
             var item = FindParentTreeViewItem(e.OriginalSource as DependencyObject);
@@ -539,6 +933,67 @@ namespace Test_Automation
             menu.Items.Add(removeItem);
 
             return menu;
+        }
+
+        private PlanNode? ResolveTestPlanNode()
+        {
+            if (SelectedNode != null)
+            {
+                var current = SelectedNode;
+                while (current != null)
+                {
+                    if (current.Type == "TestPlan")
+                    {
+                        return current;
+                    }
+
+                    current = current.Parent;
+                }
+            }
+
+            var project = RootNodes.FirstOrDefault(node => node.Type == "Project");
+            return project?.Children.FirstOrDefault(node => node.Type == "TestPlan");
+        }
+
+        private Test_Automation.Componentes.Component? BuildComponentTree(PlanNode node)
+        {
+            if (node == null || !node.IsEnabled || node.Type == "Project")
+            {
+                return null;
+            }
+
+            var component = ComponentFactory.CreateComponent(node.Type);
+            component.SetName(node.Name);
+
+            var settings = new Dictionary<string, string>();
+            foreach (var setting in node.Settings)
+            {
+                if (string.IsNullOrWhiteSpace(setting.Key))
+                {
+                    continue;
+                }
+
+                settings[setting.Key] = setting.Value;
+            }
+
+            component.Settings = settings;
+
+            var extractors = node.Extractors
+                .Select(rule => new VariableExtractionRule(rule.Source, rule.JsonPath, rule.VariableName))
+                .ToList();
+
+            component.Extractors = extractors;
+
+            foreach (var child in node.Children)
+            {
+                var childComponent = BuildComponentTree(child);
+                if (childComponent != null)
+                {
+                    component.AddChild(childComponent);
+                }
+            }
+
+            return component;
         }
 
         private static string[] GetAllowedChildren(string parentType)
@@ -817,10 +1272,16 @@ namespace Test_Automation
             node.PropertyChanged += PlanNode_PropertyChanged;
             node.Children.CollectionChanged += NodeChildren_CollectionChanged;
             node.Settings.CollectionChanged += NodeSettings_CollectionChanged;
+            node.Extractors.CollectionChanged += NodeExtractors_CollectionChanged;
 
             foreach (var setting in node.Settings)
             {
                 setting.PropertyChanged += NodeSetting_PropertyChanged;
+            }
+
+            foreach (var extractor in node.Extractors)
+            {
+                extractor.PropertyChanged += NodeExtractor_PropertyChanged;
             }
         }
 
@@ -829,10 +1290,16 @@ namespace Test_Automation
             node.PropertyChanged -= PlanNode_PropertyChanged;
             node.Children.CollectionChanged -= NodeChildren_CollectionChanged;
             node.Settings.CollectionChanged -= NodeSettings_CollectionChanged;
+            node.Extractors.CollectionChanged -= NodeExtractors_CollectionChanged;
 
             foreach (var setting in node.Settings)
             {
                 setting.PropertyChanged -= NodeSetting_PropertyChanged;
+            }
+
+            foreach (var extractor in node.Extractors)
+            {
+                extractor.PropertyChanged -= NodeExtractor_PropertyChanged;
             }
 
             foreach (var child in node.Children)
@@ -901,6 +1368,28 @@ namespace Test_Automation
                 }
             }
 
+            RebuildExtractorSourceOptions();
+            RefreshJsonPreview();
+        }
+
+        private void NodeExtractors_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems.OfType<VariableExtractionRule>())
+                {
+                    item.PropertyChanged -= NodeExtractor_PropertyChanged;
+                }
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems.OfType<VariableExtractionRule>())
+                {
+                    item.PropertyChanged += NodeExtractor_PropertyChanged;
+                }
+            }
+
             RefreshJsonPreview();
         }
 
@@ -911,6 +1400,13 @@ namespace Test_Automation
         }
 
         private void NodeSetting_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            NotifySelectedNodeEditorProperties();
+            RebuildExtractorSourceOptions();
+            RefreshJsonPreview();
+        }
+
+        private void NodeExtractor_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             NotifySelectedNodeEditorProperties();
             RefreshJsonPreview();
@@ -945,6 +1441,18 @@ namespace Test_Automation
             {
                 var method = GetSettingValue("Method", "GET");
                 var url = GetSettingValue("Url", "https://api.example.com");
+                var lastHttp = GetLastExecutionData<HttpData>(nodeName);
+                var httpRuns = GetExecutionResults(nodeName)
+                    .Where(result => result.Data is HttpData)
+                    .Select(result => new
+                    {
+                        threadIndex = result.ThreadIndex,
+                        durationMs = result.DurationMs,
+                        status = result.Status,
+                        responseStatus = (result.Data as HttpData)?.ResponseStatus,
+                        responseBody = (result.Data as HttpData)?.ResponseBody
+                    })
+                    .ToList();
                 PreviewRequest = JsonSerializer.Serialize(new
                 {
                     component = nodeName,
@@ -958,15 +1466,34 @@ namespace Test_Automation
                     body = "{ \"sample\": true }"
                 }, new JsonSerializerOptions { WriteIndented = true });
 
-                PreviewResponse = JsonSerializer.Serialize(new
+                if (httpRuns.Count > 0)
                 {
-                    status = 200,
-                    reason = "OK",
-                    body = "{ \"result\": \"success\" }",
-                    durationMs = 128
-                }, new JsonSerializerOptions { WriteIndented = true });
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        runs = httpRuns
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                else if (lastHttp != null)
+                {
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        status = lastHttp.ResponseStatus,
+                        body = lastHttp.ResponseBody,
+                        headers = lastHttp.Headers
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                else
+                {
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        message = "Response will be available after execution.",
+                        component = nodeName,
+                        type = "Http"
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
 
-                PreviewLogs = $"[{now}] HTTP request prepared\n[{now}] Target: {method} {url}\n[{now}] Mock response received: 200 OK";
+                PreviewLogs = $"[{now}] HTTP request prepared\n[{now}] Target: {method} {url}\n[{now}] Response pending execution.";
+                AppendExtractionPreview(now);
                 return;
             }
 
@@ -975,6 +1502,18 @@ namespace Test_Automation
                 var endpoint = GetSettingValue("Endpoint", "https://api.example.com/graphql");
                 var query = GetSettingValue("Query", "query { health }");
                 var variables = GetSettingValue("Variables", "{}");
+                var lastGraphQl = GetLastExecutionData<GraphQlData>(nodeName);
+                var graphRuns = GetExecutionResults(nodeName)
+                    .Where(result => result.Data is GraphQlData)
+                    .Select(result => new
+                    {
+                        threadIndex = result.ThreadIndex,
+                        durationMs = result.DurationMs,
+                        status = result.Status,
+                        responseStatus = (result.Data as GraphQlData)?.ResponseStatus,
+                        responseBody = (result.Data as GraphQlData)?.ResponseBody
+                    })
+                    .ToList();
                 PreviewRequest = JsonSerializer.Serialize(new
                 {
                     component = nodeName,
@@ -984,18 +1523,37 @@ namespace Test_Automation
                     variables
                 }, new JsonSerializerOptions { WriteIndented = true });
 
-                PreviewResponse = JsonSerializer.Serialize(new
+                if (graphRuns.Count > 0)
                 {
-                    status = 200,
-                    data = new
+                    PreviewResponse = JsonSerializer.Serialize(new
                     {
-                        health = "ok"
-                    },
-                    errors = new object[] { },
-                    durationMs = 95
-                }, new JsonSerializerOptions { WriteIndented = true });
+                        runs = graphRuns
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                else if (lastGraphQl != null)
+                {
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        status = lastGraphQl.ResponseStatus,
+                        body = lastGraphQl.ResponseBody
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                else
+                {
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        status = 200,
+                        data = new
+                        {
+                            health = "ok"
+                        },
+                        errors = new object[] { },
+                        durationMs = 95
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
 
                 PreviewLogs = $"[{now}] GraphQL request prepared\n[{now}] Endpoint: {endpoint}\n[{now}] Mock GraphQL response received.";
+                AppendExtractionPreview(now);
                 return;
             }
 
@@ -1003,6 +1561,17 @@ namespace Test_Automation
             {
                 var connection = GetSettingValue("Connection", "Server=.;Database=master;Trusted_Connection=True;");
                 var query = GetSettingValue("Query", "SELECT 1");
+                var lastSql = GetLastExecutionData<SqlData>(nodeName);
+                var sqlRuns = GetExecutionResults(nodeName)
+                    .Where(result => result.Data is SqlData)
+                    .Select(result => new
+                    {
+                        threadIndex = result.ThreadIndex,
+                        durationMs = result.DurationMs,
+                        status = result.Status,
+                        rows = (result.Data as SqlData)?.QueryResult
+                    })
+                    .ToList();
                 PreviewRequest = JsonSerializer.Serialize(new
                 {
                     component = nodeName,
@@ -1011,17 +1580,77 @@ namespace Test_Automation
                     query
                 }, new JsonSerializerOptions { WriteIndented = true });
 
-                PreviewResponse = JsonSerializer.Serialize(new
+                if (sqlRuns.Count > 0)
                 {
-                    rows = new[]
+                    PreviewResponse = JsonSerializer.Serialize(new
                     {
-                        new Dictionary<string, object> { ["Result"] = 1 }
-                    },
-                    affectedRows = 1,
-                    durationMs = 42
-                }, new JsonSerializerOptions { WriteIndented = true });
+                        runs = sqlRuns
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                else if (lastSql != null)
+                {
+                    lastSql.Properties.TryGetValue("rowsAffected", out var rowsAffected);
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        rows = lastSql.QueryResult,
+                        affectedRows = rowsAffected
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                else
+                {
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        rows = new[]
+                        {
+                            new Dictionary<string, object> { ["Result"] = 1 }
+                        },
+                        affectedRows = 1,
+                        durationMs = 42
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
 
                 PreviewLogs = $"[{now}] SQL query prepared\n[{now}] Executing: {query}\n[{now}] Mock result returned with 1 row.";
+                AppendExtractionPreview(now);
+                return;
+            }
+
+            if (nodeType == "Threads")
+            {
+                var threadCount = GetSettingValue("ThreadCount", "1");
+                var rampUp = GetSettingValue("RampUpSeconds", "1");
+                var childNames = GetDescendantNames(SelectedNode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var lastResults = _lastExecutionContext?.Results
+                    .Where(result => childNames.Contains(result.ComponentName))
+                    .Select(result => (object)new
+                    {
+                        name = result.ComponentName,
+                        threadIndex = result.ThreadIndex,
+                        durationMs = result.DurationMs,
+                        status = result.Status,
+                        passed = result.Passed,
+                        error = result.Error,
+                        data = result.Data
+                    })
+                    .ToList() ?? new List<object>();
+
+                PreviewRequest = JsonSerializer.Serialize(new
+                {
+                    component = nodeName,
+                    type = "Threads",
+                    threadCount,
+                    rampUpSeconds = rampUp
+                }, new JsonSerializerOptions { WriteIndented = true });
+
+                PreviewResponse = JsonSerializer.Serialize(new
+                {
+                    childResults = lastResults,
+                    message = lastResults.Count == 0
+                        ? "Run the TestPlan to see thread results."
+                        : "Last thread results"
+                }, new JsonSerializerOptions { WriteIndented = true });
+
+                PreviewLogs = $"[{now}] Threads preview refreshed\n[{now}] ThreadCount: {threadCount}, RampUpSeconds: {rampUp}";
+                AppendExtractionPreview(now);
                 return;
             }
 
@@ -1029,6 +1658,16 @@ namespace Test_Automation
             {
                 var language = GetSettingValue("Language", "CSharp");
                 var code = GetSettingValue("Code", string.Empty);
+                var scriptRuns = GetExecutionResults(nodeName)
+                    .Select(result => new
+                    {
+                        threadIndex = result.ThreadIndex,
+                        durationMs = result.DurationMs,
+                        status = result.Status,
+                        output = (result.Data as ScriptData)?.ExecutionResult,
+                        error = result.Error
+                    })
+                    .ToList();
                 PreviewRequest = JsonSerializer.Serialize(new
                 {
                     component = nodeName,
@@ -1037,20 +1676,42 @@ namespace Test_Automation
                     code
                 }, new JsonSerializerOptions { WriteIndented = true });
 
-                PreviewResponse = JsonSerializer.Serialize(new
+                if (scriptRuns.Count > 0)
                 {
-                    output = "Script execution simulated.",
-                    exitCode = 0,
-                    durationMs = 15
-                }, new JsonSerializerOptions { WriteIndented = true });
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        runs = scriptRuns
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                else
+                {
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        output = "Script execution simulated.",
+                        exitCode = 0,
+                        durationMs = 15
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
 
                 PreviewLogs = $"[{now}] Script compiled (simulated)\n[{now}] Script executed with exit code 0.";
+                AppendExtractionPreview(now);
                 return;
             }
 
             var settings = SelectedNode.Settings
                 .Where(setting => !string.IsNullOrWhiteSpace(setting.Key))
                 .ToDictionary(setting => setting.Key, setting => setting.Value);
+
+            var genericRuns = GetExecutionResults(nodeName)
+                .Select(result => new
+                {
+                    threadIndex = result.ThreadIndex,
+                    durationMs = result.DurationMs,
+                    status = result.Status,
+                    error = result.Error,
+                    data = result.Data
+                })
+                .ToList();
 
             PreviewRequest = JsonSerializer.Serialize(new
             {
@@ -1059,14 +1720,272 @@ namespace Test_Automation
                 settings
             }, new JsonSerializerOptions { WriteIndented = true });
 
-            PreviewResponse = JsonSerializer.Serialize(new
+            if (genericRuns.Count > 0)
             {
-                message = "Preview available when this component is executed.",
-                component = nodeName,
-                type = nodeType
-            }, new JsonSerializerOptions { WriteIndented = true });
+                PreviewResponse = JsonSerializer.Serialize(new
+                {
+                    runs = genericRuns
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+            else
+            {
+                PreviewResponse = JsonSerializer.Serialize(new
+                {
+                    message = "Preview available when this component is executed.",
+                    component = nodeName,
+                    type = nodeType
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
 
             PreviewLogs = $"[{now}] {nodeType} preview refreshed.";
+            AppendExtractionPreview(now);
+        }
+
+        private void AppendExtractionPreview(string timestamp)
+        {
+            if (SelectedNode == null || SelectedNode.Extractors.Count == 0)
+            {
+                return;
+            }
+
+            var lines = new List<string>
+            {
+                $"[{timestamp}] Variable extraction preview:"
+            };
+
+            foreach (var extractor in SelectedNode.Extractors)
+            {
+                if (string.IsNullOrWhiteSpace(extractor.VariableName) || string.IsNullOrWhiteSpace(extractor.Source))
+                {
+                    continue;
+                }
+
+                var sourceValue = ResolvePreviewSourceValue(extractor.Source);
+                if (string.IsNullOrEmpty(sourceValue))
+                {
+                    lines.Add($"[{timestamp}] - {extractor.VariableName}: <missing source> ({extractor.Source})");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(extractor.JsonPath))
+                {
+                    lines.Add($"[{timestamp}] - {extractor.VariableName} = {sourceValue}");
+                    continue;
+                }
+
+                var jsonPath = extractor.JsonPath.Trim();
+                if (string.Equals(jsonPath, "$", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(jsonPath, "$.", StringComparison.OrdinalIgnoreCase))
+                {
+                    lines.Add($"[{timestamp}] - {extractor.VariableName} = {sourceValue}");
+                    continue;
+                }
+
+                if (TryExtractJsonPath(sourceValue, extractor.JsonPath, out var extracted))
+                {
+                    lines.Add($"[{timestamp}] - {extractor.VariableName} = {extracted}");
+                }
+                else
+                {
+                    lines.Add($"[{timestamp}] - {extractor.VariableName}: <path not found>");
+                }
+            }
+
+            PreviewLogs = string.Join("\n", new[] { PreviewLogs }.Concat(lines));
+        }
+
+        private TData? GetLastExecutionData<TData>(string componentName) where TData : ComponentData
+        {
+            if (_lastExecutionContext == null)
+            {
+                return null;
+            }
+
+            return _lastExecutionContext.Results
+                .Where(result => result.Data is TData && string.Equals(result.ComponentName, componentName, StringComparison.OrdinalIgnoreCase))
+                .Select(result => result.Data)
+                .OfType<TData>()
+                .LastOrDefault();
+        }
+
+        private List<ExecutionResult> GetExecutionResults(string componentName)
+        {
+            if (_lastExecutionContext == null)
+            {
+                return new List<ExecutionResult>();
+            }
+
+            return _lastExecutionContext.Results
+                .Where(result => string.Equals(result.ComponentName, componentName, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(result => result.ThreadIndex)
+                .ThenBy(result => result.StartTime)
+                .ToList();
+        }
+
+        private static IEnumerable<string> GetDescendantNames(PlanNode node)
+        {
+            foreach (var child in node.Children)
+            {
+                yield return child.Name;
+                foreach (var descendant in GetDescendantNames(child))
+                {
+                    yield return descendant;
+                }
+            }
+        }
+
+        private string? ResolvePreviewSourceValue(string source)
+        {
+            if (string.IsNullOrWhiteSpace(source) || SelectedNode == null)
+            {
+                return null;
+            }
+
+            if (string.Equals(source, "PreviewRequest", StringComparison.OrdinalIgnoreCase))
+            {
+                return PreviewRequest;
+            }
+
+            if (string.Equals(source, "PreviewResponse", StringComparison.OrdinalIgnoreCase))
+            {
+                return PreviewResponse;
+            }
+
+            if (string.Equals(source, "PreviewLogs", StringComparison.OrdinalIgnoreCase))
+            {
+                return PreviewLogs;
+            }
+
+            var settings = SelectedNode.Settings
+                .Where(setting => !string.IsNullOrWhiteSpace(setting.Key))
+                .ToDictionary(setting => setting.Key, setting => setting.Value);
+
+            if (settings.TryGetValue(source, out var value))
+            {
+                return value;
+            }
+
+            return null;
+        }
+
+        private static bool TryExtractJsonPath(string json, string path, out string extracted)
+        {
+            extracted = string.Empty;
+            if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var element = doc.RootElement;
+                var normalized = path.Trim();
+                if (normalized.StartsWith("$"))
+                {
+                    normalized = normalized.TrimStart('$');
+                    if (normalized.StartsWith("."))
+                    {
+                        normalized = normalized.Substring(1);
+                    }
+                }
+
+                var segments = normalized.Split('.', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var segment in segments)
+                {
+                    if (!TryResolveSegment(ref element, segment))
+                    {
+                        return false;
+                    }
+                }
+
+                extracted = element.ValueKind switch
+                {
+                    JsonValueKind.String => element.GetString() ?? string.Empty,
+                    JsonValueKind.Number => element.GetRawText(),
+                    JsonValueKind.True => "true",
+                    JsonValueKind.False => "false",
+                    JsonValueKind.Null => "null",
+                    _ => element.GetRawText()
+                };
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryResolveSegment(ref JsonElement element, string segment)
+        {
+            var remaining = segment;
+            while (remaining.Length > 0)
+            {
+                var bracketIndex = remaining.IndexOf('[');
+                if (bracketIndex < 0)
+                {
+                    return TryResolvePropertyOrIndex(ref element, remaining);
+                }
+
+                var propertyName = remaining.Substring(0, bracketIndex);
+                if (!string.IsNullOrEmpty(propertyName))
+                {
+                    if (!TryResolvePropertyOrIndex(ref element, propertyName))
+                    {
+                        return false;
+                    }
+                }
+
+                var endBracket = remaining.IndexOf(']', bracketIndex + 1);
+                if (endBracket < 0)
+                {
+                    return false;
+                }
+
+                var indexValue = remaining.Substring(bracketIndex + 1, endBracket - bracketIndex - 1);
+                if (!int.TryParse(indexValue, out var index))
+                {
+                    return false;
+                }
+
+                if (element.ValueKind != JsonValueKind.Array || index < 0 || index >= element.GetArrayLength())
+                {
+                    return false;
+                }
+
+                element = element[index];
+                remaining = remaining.Substring(endBracket + 1);
+            }
+
+            return true;
+        }
+
+        private static bool TryResolvePropertyOrIndex(ref JsonElement element, string token)
+        {
+            if (element.ValueKind == JsonValueKind.Array && int.TryParse(token, out var index))
+            {
+                if (index < 0 || index >= element.GetArrayLength())
+                {
+                    return false;
+                }
+
+                element = element[index];
+                return true;
+            }
+
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            if (!element.TryGetProperty(token, out var next))
+            {
+                return false;
+            }
+
+            element = next;
+            return true;
         }
 
         private static object BuildNodeObject(PlanNode node)
@@ -1075,12 +1994,23 @@ namespace Test_Automation
                 .Where(setting => !string.IsNullOrWhiteSpace(setting.Key))
                 .ToDictionary(setting => setting.Key, setting => setting.Value);
 
+            var extractors = node.Extractors
+                .Where(extractor => !string.IsNullOrWhiteSpace(extractor.Source) || !string.IsNullOrWhiteSpace(extractor.VariableName))
+                .Select(extractor => new
+                {
+                    source = extractor.Source,
+                    jsonPath = extractor.JsonPath,
+                    variableName = extractor.VariableName
+                })
+                .ToList();
+
             return new
             {
                 type = node.Type,
                 name = node.Name,
                 enabled = node.IsEnabled,
                 settings,
+                extractors,
                 children = node.Children.Select(BuildNodeObject).ToList()
             };
         }
@@ -1095,6 +2025,15 @@ namespace Test_Automation
                 Settings = node.Settings
                     .Where(setting => !string.IsNullOrWhiteSpace(setting.Key))
                     .ToDictionary(setting => setting.Key, setting => setting.Value),
+                Extractors = node.Extractors
+                    .Where(extractor => !string.IsNullOrWhiteSpace(extractor.Source) || !string.IsNullOrWhiteSpace(extractor.VariableName))
+                    .Select(extractor => new VariableExtractionFileModel
+                    {
+                        Source = extractor.Source,
+                        JsonPath = extractor.JsonPath,
+                        VariableName = extractor.VariableName
+                    })
+                    .ToList(),
                 Children = node.Children.Select(ToFileModel).ToList()
             };
         }
@@ -1111,6 +2050,12 @@ namespace Test_Automation
             foreach (var setting in model.Settings)
             {
                 node.Settings.Add(new NodeSetting(setting.Key, setting.Value));
+            }
+
+            node.Extractors.Clear();
+            foreach (var extractor in model.Extractors)
+            {
+                node.Extractors.Add(new VariableExtractionRule(extractor.Source, extractor.JsonPath, extractor.VariableName));
             }
 
             foreach (var child in model.Children)
@@ -1157,6 +2102,7 @@ namespace Test_Automation
         private void NotifySelectedNodeEditorProperties()
         {
             OnPropertyChanged(nameof(IsProjectSelected));
+            OnPropertyChanged(nameof(IsComponentSelected));
             OnPropertyChanged(nameof(IsHttpSelected));
             OnPropertyChanged(nameof(IsGraphQlSelected));
             OnPropertyChanged(nameof(IsSqlSelected));
@@ -1172,11 +2118,42 @@ namespace Test_Automation
             OnPropertyChanged(nameof(ProjectEnvironment));
             OnPropertyChanged(nameof(HttpMethod));
             OnPropertyChanged(nameof(HttpUrl));
+            OnPropertyChanged(nameof(HttpBody));
+            OnPropertyChanged(nameof(HttpHeaders));
+            OnPropertyChanged(nameof(HttpAuthType));
+            RaiseHttpAuthVisibilityChanged();
+            OnPropertyChanged(nameof(HttpAuthUsername));
+            OnPropertyChanged(nameof(HttpAuthPassword));
+            OnPropertyChanged(nameof(HttpAuthToken));
+            OnPropertyChanged(nameof(HttpApiKeyName));
+            OnPropertyChanged(nameof(HttpApiKeyValue));
+            OnPropertyChanged(nameof(HttpApiKeyLocation));
+            OnPropertyChanged(nameof(HttpOAuthTokenUrl));
+            OnPropertyChanged(nameof(HttpOAuthClientId));
+            OnPropertyChanged(nameof(HttpOAuthClientSecret));
+            OnPropertyChanged(nameof(HttpOAuthScope));
             OnPropertyChanged(nameof(GraphQlEndpoint));
             OnPropertyChanged(nameof(GraphQlQuery));
             OnPropertyChanged(nameof(GraphQlVariables));
+            OnPropertyChanged(nameof(GraphQlHeaders));
+            OnPropertyChanged(nameof(GraphQlAuthType));
+            RaiseGraphQlAuthVisibilityChanged();
+            OnPropertyChanged(nameof(GraphQlAuthUsername));
+            OnPropertyChanged(nameof(GraphQlAuthPassword));
+            OnPropertyChanged(nameof(GraphQlAuthToken));
+            OnPropertyChanged(nameof(GraphQlApiKeyName));
+            OnPropertyChanged(nameof(GraphQlApiKeyValue));
+            OnPropertyChanged(nameof(GraphQlApiKeyLocation));
+            OnPropertyChanged(nameof(GraphQlOAuthTokenUrl));
+            OnPropertyChanged(nameof(GraphQlOAuthClientId));
+            OnPropertyChanged(nameof(GraphQlOAuthClientSecret));
+            OnPropertyChanged(nameof(GraphQlOAuthScope));
             OnPropertyChanged(nameof(SqlConnection));
             OnPropertyChanged(nameof(SqlQuery));
+            OnPropertyChanged(nameof(SqlAuthType));
+            RaiseSqlAuthVisibilityChanged();
+            OnPropertyChanged(nameof(SqlAuthUsername));
+            OnPropertyChanged(nameof(SqlAuthPassword));
             OnPropertyChanged(nameof(TimerDelayMs));
             OnPropertyChanged(nameof(LoopIterations));
             OnPropertyChanged(nameof(IfCondition));
@@ -1188,6 +2165,78 @@ namespace Test_Automation
             OnPropertyChanged(nameof(ExtractorVariableName));
             OnPropertyChanged(nameof(ScriptLanguage));
             OnPropertyChanged(nameof(ScriptCode));
+        }
+
+        private void RaiseHttpAuthVisibilityChanged()
+        {
+            OnPropertyChanged(nameof(HttpShowBasicFields));
+            OnPropertyChanged(nameof(HttpShowBearerFields));
+            OnPropertyChanged(nameof(HttpShowApiKeyFields));
+            OnPropertyChanged(nameof(HttpShowOAuthFields));
+        }
+
+        private void RaiseGraphQlAuthVisibilityChanged()
+        {
+            OnPropertyChanged(nameof(GraphQlShowBasicFields));
+            OnPropertyChanged(nameof(GraphQlShowBearerFields));
+            OnPropertyChanged(nameof(GraphQlShowApiKeyFields));
+            OnPropertyChanged(nameof(GraphQlShowOAuthFields));
+        }
+
+        private void RaiseSqlAuthVisibilityChanged()
+        {
+            OnPropertyChanged(nameof(SqlShowBasicFields));
+        }
+
+        private void RebuildExtractorSourceOptions()
+        {
+            ExtractorSourceOptions.Clear();
+
+            foreach (var source in BaseExtractorSources)
+            {
+                ExtractorSourceOptions.Add(source);
+            }
+
+            if (SelectedNode == null)
+            {
+                return;
+            }
+
+            var keys = SelectedNode.Settings
+                .Select(setting => setting.Key)
+                .Where(key => !string.IsNullOrWhiteSpace(key))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(key => key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var key in keys)
+            {
+                if (!ExtractorSourceOptions.Contains(key))
+                {
+                    ExtractorSourceOptions.Add(key);
+                }
+            }
+        }
+
+        private void AddExtractorButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null)
+            {
+                return;
+            }
+
+            SelectedNode.Extractors.Add(new VariableExtractionRule(string.Empty, string.Empty, string.Empty));
+            RefreshJsonPreview();
+        }
+
+        private void RemoveExtractorButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || sender is not Button button || button.DataContext is not VariableExtractionRule extractor)
+            {
+                return;
+            }
+
+            SelectedNode.Extractors.Remove(extractor);
+            RefreshJsonPreview();
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

@@ -35,7 +35,7 @@ namespace Test_Automation.Models
             Variables[key] = value;
         }
 
-        public object GetVariable(string key)
+        public object? GetVariable(string key)
         {
             return Variables.ContainsKey(key) ? Variables[key] : null;
         }
@@ -52,10 +52,10 @@ namespace Test_Automation.Models
     public class ExecutionResult
     {
         [JsonPropertyName("componentId")]
-        public string ComponentId { get; set; }
+        public string ComponentId { get; set; } = string.Empty;
 
         [JsonPropertyName("componentName")]
-        public string ComponentName { get; set; }
+        public string ComponentName { get; set; } = string.Empty;
 
         [JsonPropertyName("startTime")]
         public DateTime StartTime { get; set; } = DateTime.UtcNow;
@@ -70,16 +70,22 @@ namespace Test_Automation.Models
         public string Status { get; set; } = "pending"; // pending, running, passed, failed
 
         [JsonPropertyName("output")]
-        public string Output { get; set; }
+        public string Output { get; set; } = string.Empty;
 
         [JsonPropertyName("error")]
-        public string Error { get; set; }
+        public string Error { get; set; } = string.Empty;
 
         [JsonPropertyName("data")]
-        public object Data { get; set; }
+        public object? Data { get; set; }
 
         [JsonPropertyName("passed")]
         public bool Passed { get; set; }
+
+        [JsonPropertyName("threadIndex")]
+        public int ThreadIndex { get; set; }
+
+        [JsonPropertyName("threadGroupId")]
+        public string ThreadGroupId { get; set; } = string.Empty;
 
         public void MarkAsCompleted(bool success = true)
         {
@@ -96,7 +102,7 @@ namespace Test_Automation.Models
     public class ExecutionSummary
     {
         [JsonPropertyName("executionId")]
-        public string ExecutionId { get; set; }
+        public string ExecutionId { get; set; } = string.Empty;
 
         [JsonPropertyName("totalComponents")]
         public int TotalComponents { get; set; }
