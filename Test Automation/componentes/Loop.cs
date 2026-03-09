@@ -16,8 +16,20 @@ namespace Test_Automation.Componentes
 
         public override Task<ComponentData> Execute(Test_Automation.Models.ExecutionContext context)
         {
-            // Loop component logic
-            var data = new LoopData { Id = this.Id, ComponentName = this.Name };
+            var iterations = 1;
+            if (Settings.TryGetValue("Iterations", out var value)
+                && int.TryParse(value, out var parsed)
+                && parsed > 0)
+            {
+                iterations = parsed;
+            }
+
+            var data = new LoopData
+            {
+                Id = this.Id,
+                ComponentName = this.Name,
+                Iterations = iterations
+            };
             return Task.FromResult<ComponentData>(data);
         }
     }

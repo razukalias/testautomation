@@ -16,8 +16,12 @@ namespace Test_Automation.Componentes
 
         public override Task<ComponentData> Execute(Test_Automation.Models.ExecutionContext context)
         {
-            // If component logic
-            var data = new IfData { Id = this.Id, ComponentName = this.Name };
+            var data = new IfData
+            {
+                Id = this.Id,
+                ComponentName = this.Name,
+                Condition = Settings.TryGetValue("Condition", out var value) ? value : string.Empty
+            };
             return Task.FromResult<ComponentData>(data);
         }
     }

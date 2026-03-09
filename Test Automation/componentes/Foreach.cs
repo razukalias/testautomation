@@ -16,8 +16,12 @@ namespace Test_Automation.Componentes
 
         public override Task<ComponentData> Execute(Test_Automation.Models.ExecutionContext context)
         {
-            // Foreach component logic
-            var data = new ForeachData { Id = this.Id, ComponentName = this.Name };
+            var data = new ForeachData
+            {
+                Id = this.Id,
+                ComponentName = this.Name,
+                Collection = new List<object>()
+            };
             return Task.FromResult<ComponentData>(data);
         }
     }

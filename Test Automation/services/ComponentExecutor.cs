@@ -323,6 +323,21 @@ namespace Test_Automation.Services
                 return await ExecuteThreadGroup(threadsComponent, context, threadCount);
             }
 
+            if (component is Loop loopComponent)
+            {
+                return await ExecuteLoop(loopComponent, context);
+            }
+
+            if (component is If ifComponent)
+            {
+                return await ExecuteIf(ifComponent, context);
+            }
+
+            if (component is Foreach foreachComponent)
+            {
+                return await ExecuteForeach(foreachComponent, context);
+            }
+
             var result = await ExecuteComponent(component, context);
 
             // If component has children, execute them sequentially
@@ -341,6 +356,228 @@ namespace Test_Automation.Services
             }
 
             return result;
+        }
+
+        private async Task<ExecutionResult> ExecuteLoop(Loop loopComponent, Test_Automation.Models.ExecutionContext context)
+        {
+            var result = await ExecuteComponent(loopComponent, context);
+
+            var iterations = 1;
+            if (loopComponent.Settings.TryGetValue("Iterations", out var value)
+                && int.TryParse(value, out var parsed)
+                && parsed > 0)
+            {
+                iterations = parsed;
+            }
+
+            var previousIndex = context.GetVariable("LoopIndex");
+            for (var i = 0; i < iterations; i++)
+            {
+                context.SetVariable("LoopIndex", i);
+                foreach (var child in loopComponent.Children)
+                {
+                    var childResult = await ExecuteComponentTree(child, context);
+                    lock (context.Results)
+                    {
+                        context.Results.Add(childResult);
+                    }
+                }
+            }
+
+            if (previousIndex != null)
+            {
+                context.SetVariable("LoopIndex", previousIndex);
+            }
+
+            return result;
+        }
+
+        private async Task<ExecutionResult> ExecuteIf(If ifComponent, Test_Automation.Models.ExecutionContext context)
+        {
+            var result = await ExecuteComponent(ifComponent, context);
+            var condition = ifComponent.Settings.TryGetValue("Condition", out var value) ? value : string.Empty;
+            var conditionMet = EvaluateCondition(condition, context);
+
+            if (result.Data is IfData ifData)
+            {
+                ifData.Condition = condition;
+                ifData.ConditionMet = conditionMet;
+            }
+
+            if (conditionMet)
+            {
+                foreach (var child in ifComponent.Children)
+                {
+                    var childResult = await ExecuteComponentTree(child, context);
+                    lock (context.Results)
+                    {
+                        context.Results.Add(childResult);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        private async Task<ExecutionResult> ExecuteForeach(Foreach foreachComponent, Test_Automation.Models.ExecutionContext context)
+        {
+            var result = await ExecuteComponent(foreachComponent, context);
+            var sourceVariable = foreachComponent.Settings.TryGetValue("SourceVariable", out var value)
+                ? value
+                : string.Empty;
+
+            var previousItem = context.GetVariable("CurrentItem");
+            var previousIndex = context.GetVariable("CurrentIndex");
+
+            var collection = ResolveCollection(context, sourceVariable);
+            var index = 0;
+            foreach (var item in collection)
+            {
+                context.SetVariable("CurrentItem", item);
+                context.SetVariable("CurrentIndex", index);
+                foreach (var child in foreachComponent.Children)
+                {
+                    var childResult = await ExecuteComponentTree(child, context);
+                    lock (context.Results)
+                    {
+                        context.Results.Add(childResult);
+                    }
+                }
+                index++;
+            }
+
+            if (previousItem != null)
+            {
+                context.SetVariable("CurrentItem", previousItem);
+            }
+
+            if (previousIndex != null)
+            {
+                context.SetVariable("CurrentIndex", previousIndex);
+            }
+
+            return result;
+        }
+
+        private static IEnumerable<object> ResolveCollection(Test_Automation.Models.ExecutionContext context, string sourceVariable)
+        {
+            if (string.IsNullOrWhiteSpace(sourceVariable))
+            {
+                return Array.Empty<object>();
+            }
+
+            var value = context.GetVariable(sourceVariable);
+            if (value == null)
+            {
+                return Array.Empty<object>();
+            }
+
+            if (value is IEnumerable<object> objectEnumerable)
+            {
+                return objectEnumerable;
+            }
+
+            if (value is System.Collections.IEnumerable enumerable && value is not string)
+            {
+                var list = new List<object>();
+                foreach (var item in enumerable)
+                {
+                    list.Add(item ?? string.Empty);
+                }
+                return list;
+            }
+
+            if (value is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.Array)
+            {
+                return jsonElement.EnumerateArray().Select(element => (object)element.Clone()).ToList();
+            }
+
+            if (value is string text)
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(text);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        return doc.RootElement.EnumerateArray().Select(element => (object)element.Clone()).ToList();
+                    }
+                }
+                catch
+                {
+                }
+
+                return text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Cast<object>()
+                    .ToList();
+            }
+
+            return new[] { value };
+        }
+
+        private static bool EvaluateCondition(string condition, Test_Automation.Models.ExecutionContext context)
+        {
+            if (string.IsNullOrWhiteSpace(condition))
+            {
+                return false;
+            }
+
+            var resolved = ResolveConditionTokens(condition, context).Trim();
+            if (bool.TryParse(resolved, out var boolValue))
+            {
+                return boolValue;
+            }
+
+            var operators = new[] { ">=", "<=", "==", "!=", ">", "<" };
+            var op = operators.FirstOrDefault(symbol => resolved.Contains(symbol, StringComparison.Ordinal));
+            if (op == null)
+            {
+                return !string.IsNullOrWhiteSpace(resolved);
+            }
+
+            var parts = resolved.Split(op, 2, StringSplitOptions.TrimEntries);
+            if (parts.Length != 2)
+            {
+                return false;
+            }
+
+            var left = parts[0];
+            var right = parts[1];
+
+            if (double.TryParse(left, out var leftNumber) && double.TryParse(right, out var rightNumber))
+            {
+                return op switch
+                {
+                    ">" => leftNumber > rightNumber,
+                    "<" => leftNumber < rightNumber,
+                    ">=" => leftNumber >= rightNumber,
+                    "<=" => leftNumber <= rightNumber,
+                    "==" => Math.Abs(leftNumber - rightNumber) < double.Epsilon,
+                    "!=" => Math.Abs(leftNumber - rightNumber) >= double.Epsilon,
+                    _ => false
+                };
+            }
+
+            var comparison = StringComparer.OrdinalIgnoreCase.Compare(left, right);
+            return op switch
+            {
+                "==" => comparison == 0,
+                "!=" => comparison != 0,
+                ">" => comparison > 0,
+                "<" => comparison < 0,
+                ">=" => comparison >= 0,
+                "<=" => comparison <= 0,
+                _ => false
+            };
+        }
+
+        private static string ResolveConditionTokens(string condition, Test_Automation.Models.ExecutionContext context)
+        {
+            return System.Text.RegularExpressions.Regex.Replace(condition, "\\$\\{([^}]+)\\}", match =>
+            {
+                var key = match.Groups[1].Value;
+                var value = context.GetVariable(key);
+                return value?.ToString() ?? string.Empty;
+            });
         }
 
         public async Task<ExecutionResult> ExecuteThreadGroup(Threads threadComponent, Test_Automation.Models.ExecutionContext context, int threadCount = 1)
