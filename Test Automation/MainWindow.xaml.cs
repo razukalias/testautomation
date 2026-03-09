@@ -1,4 +1,5 @@
-﻿using System.Collections.ObjectModel;
+﻿using System;
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
@@ -24,6 +25,7 @@ namespace Test_Automation
 
     public class NodeFileModel
     {
+        public string Id { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public bool Enabled { get; set; }
@@ -136,6 +138,7 @@ namespace Test_Automation
 
     public class PlanNode : INotifyPropertyChanged
     {
+        public string Id { get; }
         public string Type { get; }
 
         private string _name;
@@ -183,8 +186,9 @@ namespace Test_Automation
 
         public string DisplayName => $"{Type}: {Name}";
 
-        public PlanNode(string type, string name)
+        public PlanNode(string type, string name, string? id = null)
         {
+            Id = string.IsNullOrWhiteSpace(id) ? Guid.NewGuid().ToString() : id;
             Type = type;
             _name = name;
             _isEnabled = true;
@@ -749,16 +753,23 @@ namespace Test_Automation
 
         private void AddProjectButton_Click(object sender, RoutedEventArgs e)
         {
-            if (RootNodes.Any(node => node.Type == "Project"))
+            try
             {
-                MessageBox.Show("Only one Project root is allowed.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
+                if (RootNodes.Any(node => node.Type == "Project"))
+                {
+                    MessageBox.Show("Only one Project root is allowed.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
 
-            var root = new PlanNode("Project", "Project");
-            RootNodes.Add(root);
-            SelectedNode = root;
-            RefreshJsonPreview();
+                var root = new PlanNode("Project", "Project");
+                RootNodes.Add(root);
+                SelectedNode = root;
+                RefreshJsonPreview();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to add project: {ex.Message}", "Add Project", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void SaveProjectButton_Click(object sender, RoutedEventArgs e)
@@ -2127,6 +2138,7 @@ namespace Test_Automation
         {
             return new NodeFileModel
             {
+                Id = node.Id,
                 Type = node.Type,
                 Name = node.Name,
                 Enabled = node.IsEnabled,
@@ -2148,7 +2160,7 @@ namespace Test_Automation
 
         private static PlanNode FromFileModel(NodeFileModel model, PlanNode? parent)
         {
-            var node = new PlanNode(model.Type, model.Name)
+            var node = new PlanNode(model.Type, model.Name, string.IsNullOrWhiteSpace(model.Id) ? null : model.Id)
             {
                 Parent = parent,
                 IsEnabled = model.Enabled

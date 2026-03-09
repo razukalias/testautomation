@@ -93,6 +93,15 @@
                             <ColumnDefinition Width="100" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Id" />
+                        <TextBox Grid.Column="1" Text="{Binding SelectedNode.Id, Mode=OneWay}" IsReadOnly="True" />
+                    </Grid>
+
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Name" />
                         <TextBox Grid.Column="1" Text="{Binding SelectedNode.Name, UpdateSourceTrigger=PropertyChanged}" />
                     </Grid>
