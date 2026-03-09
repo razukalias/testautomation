@@ -407,6 +407,7 @@ namespace Test_Automation
 
         public bool IsProjectSelected => SelectedNode?.Type == "Project";
         public bool IsComponentSelected => SelectedNode != null && SelectedNode.Type != "Project";
+        public bool HasSelectedNodeChildren => SelectedNode != null && SelectedNode.Children.Count > 0;
         public bool IsHttpSelected => SelectedNode?.Type == "Http";
         public bool IsGraphQlSelected => SelectedNode?.Type == "GraphQl";
         public bool IsSqlSelected => SelectedNode?.Type == "Sql";
@@ -1794,6 +1795,40 @@ namespace Test_Automation
             PreviewLogs = string.Join("\n", new[] { PreviewLogs }.Concat(lines));
         }
 
+        private void ClearRequestButton_Click(object sender, RoutedEventArgs e)
+        {
+            PreviewRequest = string.Empty;
+        }
+
+        private void ClearResponseButton_Click(object sender, RoutedEventArgs e)
+        {
+            PreviewResponse = string.Empty;
+        }
+
+        private void ClearLogsButton_Click(object sender, RoutedEventArgs e)
+        {
+            PreviewLogs = string.Empty;
+        }
+
+        private void ClearVariablesButton_Click(object sender, RoutedEventArgs e)
+        {
+            VariablesPreview = string.Empty;
+        }
+
+        private void ClearChildrenPreviewButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || _lastExecutionContext == null)
+            {
+                return;
+            }
+
+            var descendantNames = GetDescendantNames(SelectedNode)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            _lastExecutionContext.Results.RemoveAll(result => descendantNames.Contains(result.ComponentName));
+            RefreshComponentPreview();
+        }
+
         private TData? GetLastExecutionData<TData>(string componentName) where TData : ComponentData
         {
             if (_lastExecutionContext == null)
@@ -2103,6 +2138,7 @@ namespace Test_Automation
         {
             OnPropertyChanged(nameof(IsProjectSelected));
             OnPropertyChanged(nameof(IsComponentSelected));
+            OnPropertyChanged(nameof(HasSelectedNodeChildren));
             OnPropertyChanged(nameof(IsHttpSelected));
             OnPropertyChanged(nameof(IsGraphQlSelected));
             OnPropertyChanged(nameof(IsSqlSelected));

@@ -106,6 +106,13 @@
                         <CheckBox Grid.Column="1" IsChecked="{Binding SelectedNode.IsEnabled}" VerticalAlignment="Center" />
                     </Grid>
 
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Content="Clear Children Preview"
+                                Width="180"
+                                Click="ClearChildrenPreviewButton_Click"
+                                Visibility="{Binding HasSelectedNodeChildren, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    </StackPanel>
+
                     <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
                             Visibility="{Binding IsProjectSelected, Converter={StaticResource BoolToVisibilityConverter}}">
                         <StackPanel>
@@ -724,31 +731,61 @@
             <Border Grid.Row="2" BorderBrush="#D8D8D8" BorderThickness="1" Padding="8" CornerRadius="4" Margin="0,0,0,0">
                 <TabControl>
                     <TabItem Header="Request">
-                        <TextBox Text="{Binding PreviewRequest}"
-                                 FontFamily="Consolas"
-                                 FontSize="13"
-                                 AcceptsReturn="True"
-                                 VerticalScrollBarVisibility="Auto"
-                                 HorizontalScrollBarVisibility="Auto"
-                                 IsReadOnly="True" />
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                                <Button Content="Clear" Width="80" Click="ClearRequestButton_Click" />
+                            </StackPanel>
+                            <TextBox Grid.Row="1"
+                                     Text="{Binding PreviewRequest}"
+                                     FontFamily="Consolas"
+                                     FontSize="13"
+                                     AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto"
+                                     IsReadOnly="True" />
+                        </Grid>
                     </TabItem>
                     <TabItem Header="Response">
-                        <TextBox Text="{Binding PreviewResponse}"
-                                 FontFamily="Consolas"
-                                 FontSize="13"
-                                 AcceptsReturn="True"
-                                 VerticalScrollBarVisibility="Auto"
-                                 HorizontalScrollBarVisibility="Auto"
-                                 IsReadOnly="True" />
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                                <Button Content="Clear" Width="80" Click="ClearResponseButton_Click" />
+                            </StackPanel>
+                            <TextBox Grid.Row="1"
+                                     Text="{Binding PreviewResponse}"
+                                     FontFamily="Consolas"
+                                     FontSize="13"
+                                     AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto"
+                                     IsReadOnly="True" />
+                        </Grid>
                     </TabItem>
                     <TabItem Header="Logs">
-                        <TextBox Text="{Binding PreviewLogs}"
-                                 FontFamily="Consolas"
-                                 FontSize="13"
-                                 AcceptsReturn="True"
-                                 VerticalScrollBarVisibility="Auto"
-                                 HorizontalScrollBarVisibility="Auto"
-                                 IsReadOnly="True" />
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                                <Button Content="Clear" Width="80" Click="ClearLogsButton_Click" />
+                            </StackPanel>
+                            <TextBox Grid.Row="1"
+                                     Text="{Binding PreviewLogs}"
+                                     FontFamily="Consolas"
+                                     FontSize="13"
+                                     AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto"
+                                     IsReadOnly="True" />
+                        </Grid>
                     </TabItem>
                     <TabItem Header="Flow JSON">
                         <TextBox Text="{Binding JsonPreview}"
@@ -760,13 +797,23 @@
                                  IsReadOnly="True" />
                     </TabItem>
                     <TabItem Header="Variables">
-                        <TextBox Text="{Binding VariablesPreview}"
-                                 FontFamily="Consolas"
-                                 FontSize="13"
-                                 AcceptsReturn="True"
-                                 VerticalScrollBarVisibility="Auto"
-                                 HorizontalScrollBarVisibility="Auto"
-                                 IsReadOnly="True" />
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                                <Button Content="Clear" Width="80" Click="ClearVariablesButton_Click" />
+                            </StackPanel>
+                            <TextBox Grid.Row="1"
+                                     Text="{Binding VariablesPreview}"
+                                     FontFamily="Consolas"
+                                     FontSize="13"
+                                     AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto"
+                                     IsReadOnly="True" />
+                        </Grid>
                     </TabItem>
                 </TabControl>
             </Border>
