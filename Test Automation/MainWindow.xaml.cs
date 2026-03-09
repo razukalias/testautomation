@@ -30,6 +30,7 @@ namespace Test_Automation
         public string Name { get; set; } = string.Empty;
         public bool Enabled { get; set; }
         public Dictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
+        public Dictionary<string, string> Variables { get; set; } = new Dictionary<string, string>();
         public List<VariableExtractionFileModel> Extractors { get; set; } = new List<VariableExtractionFileModel>();
         public List<NodeFileModel> Children { get; set; } = new List<NodeFileModel>();
     }
@@ -194,6 +195,7 @@ namespace Test_Automation
         public PlanNode? Parent { get; set; }
         public ObservableCollection<PlanNode> Children { get; } = new ObservableCollection<PlanNode>();
         public ObservableCollection<NodeSetting> Settings { get; } = new ObservableCollection<NodeSetting>();
+        public ObservableCollection<NodeSetting> Variables { get; } = new ObservableCollection<NodeSetting>();
         public ObservableCollection<VariableExtractionRule> Extractors { get; } = new ObservableCollection<VariableExtractionRule>();
 
         public string DisplayName => $"{Type}: {Name}";
@@ -211,7 +213,12 @@ namespace Test_Automation
 
         private void ApplyDefaultSettings(string type)
         {
-            if (type == "Http")
+            if (type == "Project")
+            {
+                Settings.Add(new NodeSetting("Description", string.Empty));
+                Settings.Add(new NodeSetting("Environment", "dev"));
+            }
+            else if (type == "Http")
             {
                 Settings.Add(new NodeSetting("Method", "GET"));
                 Settings.Add(new NodeSetting("Url", "https://api.example.com"));
@@ -778,6 +785,7 @@ namespace Test_Automation
                 RootNodes.Add(root);
                 SelectedNode = root;
                 RefreshJsonPreview();
+                UpdateProjectVariablesPreview();
             }
             catch (Exception ex)
             {
@@ -856,6 +864,7 @@ namespace Test_Automation
                 RootNodes.Add(root);
                 SelectedNode = root;
                 RefreshJsonPreview();
+                UpdateProjectVariablesPreview();
             }
             catch (Exception ex)
             {
@@ -888,6 +897,7 @@ namespace Test_Automation
             try
             {
                 var context = new Test_Automation.Models.ExecutionContext();
+                ApplyProjectVariables(context);
                 var summary = await runner.RunTestPlanWithContext(testPlanComponent, context);
                 var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
                 PreviewLogs = string.Join("\n", new[]
@@ -1020,6 +1030,7 @@ namespace Test_Automation
             try
             {
                 var context = _lastExecutionContext ?? new Test_Automation.Models.ExecutionContext();
+                ApplyProjectVariables(context);
                 var result = await executor.ExecuteComponentTree(component, context);
                 context.Results.Add(result);
 
@@ -1049,6 +1060,51 @@ namespace Test_Automation
                 });
                 VariablesPreview = "{}";
             }
+        }
+
+        private void ApplyProjectVariables(Test_Automation.Models.ExecutionContext context)
+        {
+            var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
+            if (projectNode == null)
+            {
+                return;
+            }
+
+            foreach (var variable in projectNode.Variables)
+            {
+                if (string.IsNullOrWhiteSpace(variable.Key))
+                {
+                    continue;
+                }
+
+                context.SetVariable(variable.Key, variable.Value);
+            }
+        }
+
+        private void UpdateProjectVariablesPreview()
+        {
+            var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
+            if (projectNode == null)
+            {
+                VariablesPreview = "{}";
+                return;
+            }
+
+            var variables = projectNode.Variables
+                .Where(variable => !string.IsNullOrWhiteSpace(variable.Key))
+                .ToDictionary(variable => variable.Key, variable => (object)variable.Value);
+
+            var context = _lastExecutionContext ?? new Test_Automation.Models.ExecutionContext();
+            foreach (var entry in variables)
+            {
+                context.SetVariable(entry.Key, entry.Value);
+            }
+
+            _lastExecutionContext = context;
+            VariablesPreview = JsonSerializer.Serialize(variables, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
         }
 
         private ComponentExecutor CreateExecutorWithHighlight()
@@ -1279,6 +1335,28 @@ namespace Test_Automation
             }
 
             SelectedNode.Settings.Remove(setting);
+            RefreshJsonPreview();
+        }
+
+        private void AddProjectVariableButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || SelectedNode.Type != "Project")
+            {
+                return;
+            }
+
+            SelectedNode.Variables.Add(new NodeSetting("Key", "Value"));
+            RefreshJsonPreview();
+        }
+
+        private void RemoveProjectVariableButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || SelectedNode.Type != "Project" || sender is not Button button || button.DataContext is not NodeSetting setting)
+            {
+                return;
+            }
+
+            SelectedNode.Variables.Remove(setting);
             RefreshJsonPreview();
         }
 
@@ -1617,11 +1695,17 @@ namespace Test_Automation
             node.PropertyChanged += PlanNode_PropertyChanged;
             node.Children.CollectionChanged += NodeChildren_CollectionChanged;
             node.Settings.CollectionChanged += NodeSettings_CollectionChanged;
+            node.Variables.CollectionChanged += NodeVariables_CollectionChanged;
             node.Extractors.CollectionChanged += NodeExtractors_CollectionChanged;
 
             foreach (var setting in node.Settings)
             {
                 setting.PropertyChanged += NodeSetting_PropertyChanged;
+            }
+
+            foreach (var variable in node.Variables)
+            {
+                variable.PropertyChanged += NodeVariableSetting_PropertyChanged;
             }
 
             foreach (var extractor in node.Extractors)
@@ -1635,11 +1719,17 @@ namespace Test_Automation
             node.PropertyChanged -= PlanNode_PropertyChanged;
             node.Children.CollectionChanged -= NodeChildren_CollectionChanged;
             node.Settings.CollectionChanged -= NodeSettings_CollectionChanged;
+            node.Variables.CollectionChanged -= NodeVariables_CollectionChanged;
             node.Extractors.CollectionChanged -= NodeExtractors_CollectionChanged;
 
             foreach (var setting in node.Settings)
             {
                 setting.PropertyChanged -= NodeSetting_PropertyChanged;
+            }
+
+            foreach (var variable in node.Variables)
+            {
+                variable.PropertyChanged -= NodeVariableSetting_PropertyChanged;
             }
 
             foreach (var extractor in node.Extractors)
@@ -1717,6 +1807,28 @@ namespace Test_Automation
             RefreshJsonPreview();
         }
 
+        private void NodeVariables_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems.OfType<NodeSetting>())
+                {
+                    item.PropertyChanged -= NodeVariableSetting_PropertyChanged;
+                }
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems.OfType<NodeSetting>())
+                {
+                    item.PropertyChanged += NodeVariableSetting_PropertyChanged;
+                }
+            }
+
+            RefreshJsonPreview();
+            UpdateProjectVariablesPreview();
+        }
+
         private void NodeExtractors_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
             if (e.OldItems != null)
@@ -1749,6 +1861,12 @@ namespace Test_Automation
             NotifySelectedNodeEditorProperties();
             RebuildExtractorSourceOptions();
             RefreshJsonPreview();
+        }
+
+        private void NodeVariableSetting_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            RefreshJsonPreview();
+            UpdateProjectVariablesPreview();
         }
 
         private void NodeExtractor_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -2485,6 +2603,10 @@ namespace Test_Automation
                 .Where(setting => !string.IsNullOrWhiteSpace(setting.Key))
                 .ToDictionary(setting => setting.Key, setting => setting.Value);
 
+            var variables = node.Variables
+                .Where(variable => !string.IsNullOrWhiteSpace(variable.Key))
+                .ToDictionary(variable => variable.Key, variable => variable.Value);
+
             var extractors = node.Extractors
                 .Where(extractor => !string.IsNullOrWhiteSpace(extractor.Source) || !string.IsNullOrWhiteSpace(extractor.VariableName))
                 .Select(extractor => new
@@ -2501,6 +2623,7 @@ namespace Test_Automation
                 name = node.Name,
                 enabled = node.IsEnabled,
                 settings,
+                variables,
                 extractors,
                 children = node.Children.Select(BuildNodeObject).ToList()
             };
@@ -2517,6 +2640,9 @@ namespace Test_Automation
                 Settings = node.Settings
                     .Where(setting => !string.IsNullOrWhiteSpace(setting.Key))
                     .ToDictionary(setting => setting.Key, setting => setting.Value),
+                Variables = node.Variables
+                    .Where(variable => !string.IsNullOrWhiteSpace(variable.Key))
+                    .ToDictionary(variable => variable.Key, variable => variable.Value),
                 Extractors = node.Extractors
                     .Where(extractor => !string.IsNullOrWhiteSpace(extractor.Source) || !string.IsNullOrWhiteSpace(extractor.VariableName))
                     .Select(extractor => new VariableExtractionFileModel
@@ -2542,6 +2668,15 @@ namespace Test_Automation
             foreach (var setting in model.Settings)
             {
                 node.Settings.Add(new NodeSetting(setting.Key, setting.Value));
+            }
+
+            node.Variables.Clear();
+            if (model.Variables != null)
+            {
+                foreach (var variable in model.Variables)
+                {
+                    node.Variables.Add(new NodeSetting(variable.Key, variable.Value));
+                }
             }
 
             node.Extractors.Clear();
