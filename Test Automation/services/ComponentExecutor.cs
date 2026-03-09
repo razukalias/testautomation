@@ -37,6 +37,11 @@ namespace Test_Automation.Services
 
             try
             {
+                if (component.Settings != null && component.Settings.Count > 0)
+                {
+                    component.Settings = ResolveSettings(component.Settings, context);
+                }
+
                 // Execute the component
                 var componentData = await component.Execute(context);
                 result.Data = componentData;
@@ -581,12 +586,34 @@ namespace Test_Automation.Services
 
         private static string ResolveConditionTokens(string condition, Test_Automation.Models.ExecutionContext context)
         {
-            return System.Text.RegularExpressions.Regex.Replace(condition, "\\$\\{([^}]+)\\}", match =>
+            return ResolveTokens(condition, context);
+        }
+
+        private static string ResolveTokens(string template, Test_Automation.Models.ExecutionContext context)
+        {
+            if (string.IsNullOrEmpty(template))
+            {
+                return template;
+            }
+
+            return System.Text.RegularExpressions.Regex.Replace(template, "\\$\\{([^}]+)\\}", match =>
             {
                 var key = match.Groups[1].Value;
                 var value = context.GetVariable(key);
                 return value?.ToString() ?? string.Empty;
             });
+        }
+
+        private static Dictionary<string, string> ResolveSettings(Dictionary<string, string> settings, Test_Automation.Models.ExecutionContext context)
+        {
+            var resolved = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in settings)
+            {
+                var value = entry.Value ?? string.Empty;
+                resolved[entry.Key] = ResolveTokens(value, context);
+            }
+
+            return resolved;
         }
 
         public async Task<ExecutionResult> ExecuteThreadGroup(Threads threadComponent, Test_Automation.Models.ExecutionContext context, int threadCount = 1)
