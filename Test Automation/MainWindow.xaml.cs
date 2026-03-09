@@ -925,6 +925,17 @@ namespace Test_Automation
                 menu.Items.Add(new Separator());
             }
 
+            if (!string.Equals(selectedNode.Type, "Project", StringComparison.OrdinalIgnoreCase))
+            {
+                var runItem = new MenuItem { Header = "Run (This + Children)" };
+                runItem.Click += async (_, _) => await RunSelectedNodeWithChildrenAsync(selectedNode);
+                menu.Items.Add(runItem);
+                var clearPreviewItem = new MenuItem { Header = "Clear Preview (This + Children)" };
+                clearPreviewItem.Click += (_, _) => ClearSelectedNodePreviewWithChildren(selectedNode);
+                menu.Items.Add(clearPreviewItem);
+                menu.Items.Add(new Separator());
+            }
+
             var cloneItem = new MenuItem { Header = "Clone" };
             cloneItem.Click += (_, _) => CloneNode(selectedNode);
             menu.Items.Add(cloneItem);
@@ -954,6 +965,65 @@ namespace Test_Automation
 
             var project = RootNodes.FirstOrDefault(node => node.Type == "Project");
             return project?.Children.FirstOrDefault(node => node.Type == "TestPlan");
+        }
+
+        private async Task RunSelectedNodeWithChildrenAsync(PlanNode selectedNode)
+        {
+            if (selectedNode == null)
+            {
+                return;
+            }
+
+            if (string.Equals(selectedNode.Type, "Project", StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show("Select a component node to run.", "Run Component", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var component = BuildComponentTree(selectedNode);
+            if (component == null)
+            {
+                MessageBox.Show("Unable to build the selected component.", "Run Component", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var executor = new Test_Automation.Services.ComponentExecutor();
+            var startTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            PreviewLogs = $"[{startTimestamp}] Running: {selectedNode.Name}";
+            VariablesPreview = "{}";
+
+            try
+            {
+                var context = new Test_Automation.Models.ExecutionContext();
+                var result = await executor.ExecuteComponentTree(component, context);
+                context.Results.Add(result);
+
+                var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                PreviewLogs = string.Join("\n", new[]
+                {
+                    PreviewLogs,
+                    $"[{endTimestamp}] Status: {(result.Passed ? "passed" : "failed")}",
+                    $"[{endTimestamp}] Results: {context.Results.Count}"
+                });
+
+                _lastExecutionContext = context;
+                VariablesPreview = JsonSerializer.Serialize(context.Variables, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+
+                RefreshComponentPreview();
+            }
+            catch (Exception ex)
+            {
+                var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                PreviewLogs = string.Join("\n", new[]
+                {
+                    PreviewLogs,
+                    $"[{endTimestamp}] Run failed: {ex.Message}"
+                });
+                VariablesPreview = "{}";
+            }
         }
 
         private Test_Automation.Componentes.Component? BuildComponentTree(PlanNode node)
@@ -1459,12 +1529,7 @@ namespace Test_Automation
                     component = nodeName,
                     type = "Http",
                     method,
-                    url,
-                    headers = new Dictionary<string, string>
-                    {
-                        ["Content-Type"] = "application/json"
-                    },
-                    body = "{ \"sample\": true }"
+                    url
                 }, new JsonSerializerOptions { WriteIndented = true });
 
                 if (httpRuns.Count > 0)
@@ -1493,7 +1558,7 @@ namespace Test_Automation
                     }, new JsonSerializerOptions { WriteIndented = true });
                 }
 
-                PreviewLogs = $"[{now}] HTTP request prepared\n[{now}] Target: {method} {url}\n[{now}] Response pending execution.";
+                PreviewLogs = $"[{now}] HTTP preview refreshed\n[{now}] Target: {method} {url}";
                 AppendExtractionPreview(now);
                 return;
             }
@@ -1543,17 +1608,13 @@ namespace Test_Automation
                 {
                     PreviewResponse = JsonSerializer.Serialize(new
                     {
-                        status = 200,
-                        data = new
-                        {
-                            health = "ok"
-                        },
-                        errors = new object[] { },
-                        durationMs = 95
+                        message = "Response will be available after execution.",
+                        component = nodeName,
+                        type = "GraphQl"
                     }, new JsonSerializerOptions { WriteIndented = true });
                 }
 
-                PreviewLogs = $"[{now}] GraphQL request prepared\n[{now}] Endpoint: {endpoint}\n[{now}] Mock GraphQL response received.";
+                PreviewLogs = $"[{now}] GraphQL preview refreshed\n[{now}] Endpoint: {endpoint}";
                 AppendExtractionPreview(now);
                 return;
             }
@@ -1601,16 +1662,13 @@ namespace Test_Automation
                 {
                     PreviewResponse = JsonSerializer.Serialize(new
                     {
-                        rows = new[]
-                        {
-                            new Dictionary<string, object> { ["Result"] = 1 }
-                        },
-                        affectedRows = 1,
-                        durationMs = 42
+                        message = "Response will be available after execution.",
+                        component = nodeName,
+                        type = "Sql"
                     }, new JsonSerializerOptions { WriteIndented = true });
                 }
 
-                PreviewLogs = $"[{now}] SQL query prepared\n[{now}] Executing: {query}\n[{now}] Mock result returned with 1 row.";
+                PreviewLogs = $"[{now}] SQL preview refreshed\n[{now}] Executing: {query}";
                 AppendExtractionPreview(now);
                 return;
             }
@@ -1688,13 +1746,13 @@ namespace Test_Automation
                 {
                     PreviewResponse = JsonSerializer.Serialize(new
                     {
-                        output = "Script execution simulated.",
-                        exitCode = 0,
-                        durationMs = 15
+                        message = "Response will be available after execution.",
+                        component = nodeName,
+                        type = "Script"
                     }, new JsonSerializerOptions { WriteIndented = true });
                 }
 
-                PreviewLogs = $"[{now}] Script compiled (simulated)\n[{now}] Script executed with exit code 0.";
+                PreviewLogs = $"[{now}] Script preview refreshed";
                 AppendExtractionPreview(now);
                 return;
             }
@@ -1826,6 +1884,21 @@ namespace Test_Automation
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             _lastExecutionContext.Results.RemoveAll(result => descendantNames.Contains(result.ComponentName));
+            RefreshComponentPreview();
+        }
+
+        private void ClearSelectedNodePreviewWithChildren(PlanNode selectedNode)
+        {
+            if (selectedNode == null || _lastExecutionContext == null)
+            {
+                return;
+            }
+
+            var namesToClear = GetDescendantNames(selectedNode)
+                .Concat(new[] { selectedNode.Name })
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            _lastExecutionContext.Results.RemoveAll(result => namesToClear.Contains(result.ComponentName));
             RefreshComponentPreview();
         }
 
