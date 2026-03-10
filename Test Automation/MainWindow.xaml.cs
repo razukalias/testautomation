@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
@@ -135,6 +136,145 @@ namespace Test_Automation
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
+    }
+
+    public class EnvironmentEndpoint : INotifyPropertyChanged
+    {
+        private string _name;
+        private string _path;
+        private string _method;
+        private string _authType;
+        private string _authValue;
+
+        public string Name
+        {
+            get => _name;
+            set
+            {
+                if (_name == value) return;
+                _name = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string Path
+        {
+            get => _path;
+            set
+            {
+                if (_path == value) return;
+                _path = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string Method
+        {
+            get => _method;
+            set
+            {
+                if (_method == value) return;
+                _method = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string AuthType
+        {
+            get => _authType;
+            set
+            {
+                if (_authType == value) return;
+                _authType = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string AuthValue
+        {
+            get => _authValue;
+            set
+            {
+                if (_authValue == value) return;
+                _authValue = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public EnvironmentEndpoint(string name = "endpoint", string path = "/", string method = "GET", string authType = "None", string authValue = "")
+        {
+            _name = name;
+            _path = path;
+            _method = method;
+            _authType = authType;
+            _authValue = authValue;
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+
+    public class EnvironmentOption : INotifyPropertyChanged
+    {
+        private string _name;
+        private string _baseUrl;
+
+        public string Name
+        {
+            get => _name;
+            set
+            {
+                if (_name == value) return;
+                _name = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string BaseUrl
+        {
+            get => _baseUrl;
+            set
+            {
+                if (_baseUrl == value) return;
+                _baseUrl = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public ObservableCollection<EnvironmentEndpoint> Endpoints { get; } = new ObservableCollection<EnvironmentEndpoint>();
+
+        public EnvironmentOption(string name = "dev", string baseUrl = "")
+        {
+            _name = name;
+            _baseUrl = baseUrl;
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+
+    public class EnvironmentEndpointFileModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Path { get; set; } = string.Empty;
+        public string Method { get; set; } = "GET";
+        public string AuthType { get; set; } = "None";
+        public string AuthValue { get; set; } = string.Empty;
+    }
+
+    public class EnvironmentFileModel
+    {
+        public string Name { get; set; } = "dev";
+        public string BaseUrl { get; set; } = string.Empty;
+        public List<EnvironmentEndpointFileModel> Endpoints { get; set; } = new List<EnvironmentEndpointFileModel>();
     }
 
     public class PlanNode : INotifyPropertyChanged
@@ -331,6 +471,7 @@ namespace Test_Automation
             "PreviewResponse",
             "PreviewLogs"
         };
+        public ObservableCollection<EnvironmentOption> Environments { get; } = new ObservableCollection<EnvironmentOption>();
         public ObservableCollection<string> AuthTypeOptions { get; } = new ObservableCollection<string>
         {
             "WindowsIntegrated",
@@ -352,6 +493,8 @@ namespace Test_Automation
             "OPTIONS"
         };
 
+        private EnvironmentOption? _selectedEnvironment;
+        private EnvironmentEndpoint? _selectedHttpEndpoint;
         private PlanNode? _selectedNode;
         private string _jsonPreview = "{}";
         private string _previewRequest = "Select a component to see request preview.";
@@ -359,6 +502,48 @@ namespace Test_Automation
         private string _previewLogs = "Logs will appear here.";
         private string _variablesPreview = "{}";
         private Test_Automation.Models.ExecutionContext? _lastExecutionContext;
+        private bool _isLoadingProject;
+
+        public EnvironmentOption? SelectedEnvironment
+        {
+            get => _selectedEnvironment;
+            set
+            {
+                if (_selectedEnvironment == value)
+                {
+                    return;
+                }
+
+                _selectedEnvironment = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SelectedEnvironmentName));
+                SelectedHttpEndpoint = _selectedEnvironment?.Endpoints.FirstOrDefault();
+                if (_isLoadingProject)
+                {
+                    return;
+                }
+                PersistEnvironmentsToProjectSetting();
+                UpdateProjectVariablesPreview();
+                RefreshComponentPreview();
+            }
+        }
+
+        public EnvironmentEndpoint? SelectedHttpEndpoint
+        {
+            get => _selectedHttpEndpoint;
+            set
+            {
+                if (_selectedHttpEndpoint == value)
+                {
+                    return;
+                }
+
+                _selectedHttpEndpoint = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string SelectedEnvironmentName => SelectedEnvironment?.Name ?? string.Empty;
 
         public PlanNode? SelectedNode
         {
@@ -429,6 +614,7 @@ namespace Test_Automation
             }
         }
 
+        public bool HasProject => RootNodes.Any(node => node.Type == "Project");
         public bool IsProjectSelected => SelectedNode?.Type == "Project";
         public bool IsComponentSelected => SelectedNode != null && SelectedNode.Type != "Project";
         public bool HasSelectedNodeChildren => SelectedNode != null && SelectedNode.Children.Count > 0;
@@ -451,8 +637,25 @@ namespace Test_Automation
 
         public string ProjectEnvironment
         {
-            get => GetSettingValue("Environment", "dev");
-            set => SetSettingValue("Environment", value);
+            get => SelectedEnvironment?.Name ?? GetSettingValue("Environment", "dev");
+            set
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    SetSettingValue("Environment", value);
+                    return;
+                }
+
+                var existing = Environments.FirstOrDefault(env => string.Equals(env.Name, value, StringComparison.OrdinalIgnoreCase));
+                if (existing == null)
+                {
+                    existing = new EnvironmentOption(value, SelectedEnvironment?.BaseUrl ?? string.Empty);
+                    Environments.Add(existing);
+                }
+
+                SelectedEnvironment = existing;
+                PersistEnvironmentsToProjectSetting();
+            }
         }
 
         public string HttpMethod
@@ -768,6 +971,7 @@ namespace Test_Automation
             InitializeComponent();
             DataContext = this;
             RootNodes.CollectionChanged += RootNodes_CollectionChanged;
+            Environments.CollectionChanged += Environments_CollectionChanged;
             RefreshJsonPreview();
         }
 
@@ -814,6 +1018,7 @@ namespace Test_Automation
                 return;
             }
 
+            PersistEnvironmentsToProjectSetting();
             var model = new ProjectFileModel
             {
                 Version = 1,
@@ -827,6 +1032,252 @@ namespace Test_Automation
 
             File.WriteAllText(dialog.FileName, json);
             MessageBox.Show("Project saved successfully.", "Save Project", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void PersistEnvironmentsToProjectSetting()
+        {
+            if (_isLoadingProject)
+            {
+                return;
+            }
+
+            var projectNode = GetProjectNode();
+            if (projectNode == null)
+            {
+                return;
+            }
+
+            var payload = Environments
+                .Select(environment => new EnvironmentFileModel
+                {
+                    Name = environment.Name ?? string.Empty,
+                    BaseUrl = environment.BaseUrl ?? string.Empty,
+                    Endpoints = environment.Endpoints
+                        .Select(endpoint => new EnvironmentEndpointFileModel
+                        {
+                            Name = endpoint.Name ?? string.Empty,
+                            Path = endpoint.Path ?? string.Empty,
+                            Method = endpoint.Method ?? "GET",
+                            AuthType = endpoint.AuthType ?? "None",
+                            AuthValue = endpoint.AuthValue ?? string.Empty
+                        })
+                        .ToList()
+                })
+                .ToList();
+
+            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
+            UpsertSetting(projectNode, "Environments", json);
+            UpsertSetting(projectNode, "Environment", SelectedEnvironment?.Name ?? string.Empty);
+        }
+
+        private void LoadEnvironmentsFromProjectSettings(PlanNode projectNode)
+        {
+            _isLoadingProject = true;
+            foreach (var environment in Environments.ToList())
+            {
+                DetachEnvironmentEvents(environment);
+            }
+
+            Environments.Clear();
+
+            var envSetting = projectNode.Settings.FirstOrDefault(setting => string.Equals(setting.Key, "Environments", StringComparison.OrdinalIgnoreCase));
+            var selectedEnvironmentName = projectNode.Settings.FirstOrDefault(setting => string.Equals(setting.Key, "Environment", StringComparison.OrdinalIgnoreCase))?.Value ?? "dev";
+            var list = new List<EnvironmentFileModel>();
+
+            if (envSetting != null && !string.IsNullOrWhiteSpace(envSetting.Value))
+            {
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<List<EnvironmentFileModel>>(envSetting.Value);
+                    if (parsed != null)
+                    {
+                        list = parsed;
+                    }
+                }
+                catch
+                {
+                    list = new List<EnvironmentFileModel>();
+                }
+            }
+
+            if (list.Count == 0)
+            {
+                list.Add(new EnvironmentFileModel
+                {
+                    Name = selectedEnvironmentName,
+                    BaseUrl = string.Empty,
+                    Endpoints = new List<EnvironmentEndpointFileModel>
+                    {
+                        new EnvironmentEndpointFileModel
+                        {
+                            Name = "default",
+                            Path = "/",
+                            Method = "GET",
+                            AuthType = "None",
+                            AuthValue = string.Empty
+                        }
+                    }
+                });
+            }
+
+            foreach (var model in list)
+            {
+                var environment = new EnvironmentOption(model.Name ?? "dev", model.BaseUrl ?? string.Empty);
+                foreach (var endpoint in model.Endpoints ?? new List<EnvironmentEndpointFileModel>())
+                {
+                    environment.Endpoints.Add(new EnvironmentEndpoint(
+                        endpoint.Name ?? "endpoint",
+                        endpoint.Path ?? "/",
+                        endpoint.Method ?? "GET",
+                        endpoint.AuthType ?? "None",
+                        endpoint.AuthValue ?? string.Empty));
+                }
+
+                Environments.Add(environment);
+            }
+
+            SelectedEnvironment = Environments.FirstOrDefault(env => string.Equals(env.Name, selectedEnvironmentName, StringComparison.OrdinalIgnoreCase))
+                                   ?? Environments.FirstOrDefault();
+            _isLoadingProject = false;
+            OnEnvironmentsChanged();
+        }
+
+        private void InitializeDefaultEnvironments(string? preferredName = null)
+        {
+            var name = string.IsNullOrWhiteSpace(preferredName) ? "dev" : preferredName;
+            _isLoadingProject = true;
+            foreach (var environment in Environments.ToList())
+            {
+                DetachEnvironmentEvents(environment);
+            }
+
+            Environments.Clear();
+            var environmentOption = new EnvironmentOption(name, string.Empty);
+            environmentOption.Endpoints.Add(new EnvironmentEndpoint("default", "/", "GET"));
+            Environments.Add(environmentOption);
+            SelectedEnvironment = environmentOption;
+            _isLoadingProject = false;
+            OnEnvironmentsChanged();
+        }
+
+        private static void UpsertSetting(PlanNode node, string key, string value)
+        {
+            var existing = node.Settings.FirstOrDefault(setting => string.Equals(setting.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (existing == null)
+            {
+                node.Settings.Add(new NodeSetting(key, value));
+                return;
+            }
+
+            existing.Value = value;
+        }
+
+        private string GenerateUniqueEnvironmentName(string baseName)
+        {
+            var existing = new HashSet<string>(Environments.Select(env => env.Name), StringComparer.OrdinalIgnoreCase);
+            if (!existing.Contains(baseName))
+            {
+                return baseName;
+            }
+
+            var index = 1;
+            while (existing.Contains($"{baseName}-{index}"))
+            {
+                index++;
+            }
+
+            return $"{baseName}-{index}";
+        }
+
+        private static string BuildEndpointUrl(EnvironmentOption environment, EnvironmentEndpoint endpoint)
+        {
+            var baseUrl = environment.BaseUrl ?? string.Empty;
+            var path = endpoint.Path ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                return path ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return baseUrl;
+            }
+
+            var normalizedBase = baseUrl.TrimEnd('/');
+            var normalizedPath = path.StartsWith("/", StringComparison.Ordinal) ? path : "/" + path;
+            return $"{normalizedBase}{normalizedPath}";
+        }
+
+        private static string SanitizeEndpointKey(string? name)
+        {
+            var safe = string.IsNullOrWhiteSpace(name) ? "endpoint" : name;
+            safe = Regex.Replace(safe, "[^A-Za-z0-9_]", "_");
+            if (string.IsNullOrWhiteSpace(safe))
+            {
+                safe = "endpoint";
+            }
+
+            return safe;
+        }
+
+        private Dictionary<string, object> BuildEnvironmentVariableSnapshot()
+        {
+            var snapshot = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            var environment = SelectedEnvironment ?? Environments.FirstOrDefault();
+            if (environment == null)
+            {
+                return snapshot;
+            }
+
+            snapshot["environment"] = environment.Name ?? string.Empty;
+            snapshot["baseUrl"] = environment.BaseUrl ?? string.Empty;
+            snapshot["baseurl"] = environment.BaseUrl ?? string.Empty;
+            snapshot["environmentBaseUrl"] = environment.BaseUrl ?? string.Empty;
+
+            var endpoints = environment.Endpoints.Select(endpoint => new
+            {
+                name = endpoint.Name,
+                url = BuildEndpointUrl(environment, endpoint),
+                method = endpoint.Method,
+                authType = endpoint.AuthType,
+                authValue = endpoint.AuthValue
+            }).ToList();
+
+            snapshot["environmentEndpoints"] = endpoints;
+
+            foreach (var endpoint in environment.Endpoints)
+            {
+                var key = SanitizeEndpointKey(endpoint.Name);
+                snapshot[$"{key}_url"] = BuildEndpointUrl(environment, endpoint);
+                snapshot[$"{key}_method"] = endpoint.Method ?? string.Empty;
+                snapshot[$"{key}_authType"] = endpoint.AuthType ?? string.Empty;
+                snapshot[$"{key}_authValue"] = endpoint.AuthValue ?? string.Empty;
+            }
+
+            return snapshot;
+        }
+
+        private void ApplyEnvironmentVariables(Test_Automation.Models.ExecutionContext context)
+        {
+            var environment = SelectedEnvironment ?? Environments.FirstOrDefault();
+            if (environment == null)
+            {
+                return;
+            }
+
+            var snapshot = BuildEnvironmentVariableSnapshot();
+            foreach (var entry in snapshot)
+            {
+                if (string.Equals(entry.Key, "environmentEndpoints", StringComparison.OrdinalIgnoreCase))
+                {
+                    var json = JsonSerializer.Serialize(entry.Value ?? new object());
+                    context.SetVariable(entry.Key, json);
+                    continue;
+                }
+
+                context.SetVariable(entry.Key, entry.Value ?? string.Empty);
+            }
         }
 
         private void LoadProjectButton_Click(object sender, RoutedEventArgs e)
@@ -1079,6 +1530,8 @@ namespace Test_Automation
 
                 context.SetVariable(variable.Key, variable.Value);
             }
+
+            ApplyEnvironmentVariables(context);
         }
 
         private void UpdateProjectVariablesPreview()
@@ -1094,10 +1547,24 @@ namespace Test_Automation
                 .Where(variable => !string.IsNullOrWhiteSpace(variable.Key))
                 .ToDictionary(variable => variable.Key, variable => (object)variable.Value);
 
+            var environmentSnapshot = BuildEnvironmentVariableSnapshot();
+            foreach (var entry in environmentSnapshot)
+            {
+                variables[entry.Key] = entry.Value;
+            }
+
             var context = _lastExecutionContext ?? new Test_Automation.Models.ExecutionContext();
             foreach (var entry in variables)
             {
-                context.SetVariable(entry.Key, entry.Value);
+                var value = entry.Value ?? string.Empty;
+                if (string.Equals(entry.Key, "environmentEndpoints", StringComparison.OrdinalIgnoreCase))
+                {
+                    var json = JsonSerializer.Serialize(value);
+                    context.SetVariable(entry.Key, json);
+                    continue;
+                }
+
+                context.SetVariable(entry.Key, value);
             }
 
             _lastExecutionContext = context;
@@ -1357,6 +1824,84 @@ namespace Test_Automation
             }
 
             SelectedNode.Variables.Remove(setting);
+            RefreshJsonPreview();
+        }
+
+        private void AddEnvironmentButton_Click(object sender, RoutedEventArgs e)
+        {
+            var name = GenerateUniqueEnvironmentName("env");
+            var baseUrl = SelectedEnvironment?.BaseUrl ?? "https://api.example.com";
+            var environment = new EnvironmentOption(name, baseUrl);
+            environment.Endpoints.Add(new EnvironmentEndpoint("default", "/", "GET"));
+            Environments.Add(environment);
+            SelectedEnvironment = environment;
+        }
+
+        private void RemoveEnvironmentButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedEnvironment == null)
+            {
+                return;
+            }
+
+            if (Environments.Count <= 1)
+            {
+                MessageBox.Show("At least one environment is required.", "Environment", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var toRemove = SelectedEnvironment;
+            Environments.Remove(toRemove);
+            SelectedEnvironment = Environments.FirstOrDefault();
+        }
+
+        private void AddEndpointButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedEnvironment == null)
+            {
+                return;
+            }
+
+            SelectedEnvironment.Endpoints.Add(new EnvironmentEndpoint("endpoint", "/", "GET"));
+        }
+
+        private void RemoveEndpointButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedEnvironment == null || sender is not Button button || button.DataContext is not EnvironmentEndpoint endpoint)
+            {
+                return;
+            }
+
+            SelectedEnvironment.Endpoints.Remove(endpoint);
+        }
+
+        private void ApplyHttpEndpointButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedHttpEndpoint == null || SelectedEnvironment == null || !IsHttpSelected)
+            {
+                return;
+            }
+
+            HttpUrl = BuildEndpointUrl(SelectedEnvironment, SelectedHttpEndpoint);
+
+            if (!string.IsNullOrWhiteSpace(SelectedHttpEndpoint.Method))
+            {
+                HttpMethod = SelectedHttpEndpoint.Method;
+            }
+
+            if (!string.IsNullOrWhiteSpace(SelectedHttpEndpoint.AuthType))
+            {
+                HttpAuthType = SelectedHttpEndpoint.AuthType;
+                if (string.Equals(SelectedHttpEndpoint.AuthType, "Bearer", StringComparison.OrdinalIgnoreCase))
+                {
+                    HttpAuthToken = SelectedHttpEndpoint.AuthValue;
+                }
+                else if (string.Equals(SelectedHttpEndpoint.AuthType, "ApiKey", StringComparison.OrdinalIgnoreCase))
+                {
+                    HttpApiKeyValue = SelectedHttpEndpoint.AuthValue;
+                }
+            }
+
             RefreshJsonPreview();
         }
 
@@ -1761,7 +2306,163 @@ namespace Test_Automation
                 }
             }
 
+            OnPropertyChanged(nameof(HasProject));
+            if (HasProject)
+            {
+                var project = GetProjectNode();
+                if (project != null)
+                {
+                    LoadEnvironmentsFromProjectSettings(project);
+                }
+            }
+            else
+            {
+                ClearEnvironments();
+            }
+
             RefreshJsonPreview();
+        }
+
+        private PlanNode? GetProjectNode()
+        {
+            return RootNodes.FirstOrDefault(node => node.Type == "Project");
+        }
+
+        private void ClearEnvironments()
+        {
+            _isLoadingProject = true;
+            foreach (var environment in Environments.ToList())
+            {
+                DetachEnvironmentEvents(environment);
+            }
+
+            Environments.Clear();
+            SelectedEnvironment = null;
+            _isLoadingProject = false;
+            OnPropertyChanged(nameof(SelectedEnvironmentName));
+        }
+
+        private void Environments_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems.OfType<EnvironmentOption>())
+                {
+                    DetachEnvironmentEvents(item);
+                }
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems.OfType<EnvironmentOption>())
+                {
+                    AttachEnvironmentEvents(item);
+                }
+            }
+
+            if (_isLoadingProject)
+            {
+                return;
+            }
+
+            if (SelectedEnvironment != null && !Environments.Contains(SelectedEnvironment))
+            {
+                SelectedEnvironment = Environments.FirstOrDefault();
+            }
+            else if (SelectedEnvironment == null && Environments.Count > 0)
+            {
+                SelectedEnvironment = Environments.First();
+            }
+
+            OnEnvironmentsChanged();
+        }
+
+        private void EnvironmentEndpoints_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems.OfType<EnvironmentEndpoint>())
+                {
+                    item.PropertyChanged -= EnvironmentEndpoint_PropertyChanged;
+                }
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems.OfType<EnvironmentEndpoint>())
+                {
+                    item.PropertyChanged += EnvironmentEndpoint_PropertyChanged;
+                }
+            }
+
+            if (_isLoadingProject)
+            {
+                return;
+            }
+
+            OnEnvironmentsChanged();
+        }
+
+        private void Environment_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_isLoadingProject)
+            {
+                return;
+            }
+
+            OnEnvironmentsChanged();
+        }
+
+        private void EnvironmentEndpoint_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_isLoadingProject)
+            {
+                return;
+            }
+
+            OnEnvironmentsChanged();
+        }
+
+        private void AttachEnvironmentEvents(EnvironmentOption environment)
+        {
+            environment.PropertyChanged += Environment_PropertyChanged;
+            environment.Endpoints.CollectionChanged += EnvironmentEndpoints_CollectionChanged;
+            foreach (var endpoint in environment.Endpoints)
+            {
+                endpoint.PropertyChanged += EnvironmentEndpoint_PropertyChanged;
+            }
+        }
+
+        private void DetachEnvironmentEvents(EnvironmentOption environment)
+        {
+            environment.PropertyChanged -= Environment_PropertyChanged;
+            environment.Endpoints.CollectionChanged -= EnvironmentEndpoints_CollectionChanged;
+            foreach (var endpoint in environment.Endpoints)
+            {
+                endpoint.PropertyChanged -= EnvironmentEndpoint_PropertyChanged;
+            }
+        }
+
+        private void OnEnvironmentsChanged()
+        {
+            if (_isLoadingProject)
+            {
+                return;
+            }
+
+            if (SelectedEnvironment != null && SelectedHttpEndpoint != null && !SelectedEnvironment.Endpoints.Contains(SelectedHttpEndpoint))
+            {
+                SelectedHttpEndpoint = SelectedEnvironment.Endpoints.FirstOrDefault();
+            }
+            else if (SelectedEnvironment != null && SelectedHttpEndpoint == null && SelectedEnvironment.Endpoints.Count > 0)
+            {
+                SelectedHttpEndpoint = SelectedEnvironment.Endpoints.FirstOrDefault();
+            }
+
+            PersistEnvironmentsToProjectSetting();
+            UpdateProjectVariablesPreview();
+            RefreshJsonPreview();
+            OnPropertyChanged(nameof(SelectedEnvironmentName));
         }
 
         private void NodeChildren_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -2741,6 +3442,7 @@ namespace Test_Automation
             OnPropertyChanged(nameof(IsAssertSelected));
             OnPropertyChanged(nameof(IsVariableExtractorSelected));
             OnPropertyChanged(nameof(IsScriptSelected));
+            OnPropertyChanged(nameof(SelectedEnvironmentName));
 
             OnPropertyChanged(nameof(ProjectDescription));
             OnPropertyChanged(nameof(ProjectEnvironment));
