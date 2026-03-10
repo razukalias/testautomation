@@ -9,6 +9,7 @@ using System.Text.Json;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using Test_Automation.Factories;
@@ -17,6 +18,94 @@ using Test_Automation.Services;
 
 namespace Test_Automation
 {
+    public class VariableUsageLabelConverter : IMultiValueConverter
+    {
+        public object Convert(object[] values, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            var variableName = values.Length > 0 ? values[0]?.ToString() ?? string.Empty : string.Empty;
+            if (Application.Current?.MainWindow is not MainWindow window)
+            {
+                return string.Empty;
+            }
+
+            return window.GetVariableUniquenessLabel(variableName);
+        }
+
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, System.Globalization.CultureInfo culture)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    public class VariableUsageTooltipConverter : IMultiValueConverter
+    {
+        public object Convert(object[] values, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            var variableName = values.Length > 0 ? values[0]?.ToString() ?? string.Empty : string.Empty;
+            if (Application.Current?.MainWindow is not MainWindow window)
+            {
+                return string.Empty;
+            }
+
+            return window.GetVariableUsageTooltip(variableName);
+        }
+
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, System.Globalization.CultureInfo culture)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    public class VariableSettingUsageLabelConverter : IMultiValueConverter
+    {
+        public object Convert(object[] values, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            var key = values.Length > 0 ? values[0]?.ToString() ?? string.Empty : string.Empty;
+            var value = values.Length > 1 ? values[1]?.ToString() ?? string.Empty : string.Empty;
+            if (!MainWindow.IsVariableSettingKey(key))
+            {
+                return string.Empty;
+            }
+
+            if (Application.Current?.MainWindow is not MainWindow window)
+            {
+                return string.Empty;
+            }
+
+            return window.GetVariableUniquenessLabel(value);
+        }
+
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, System.Globalization.CultureInfo culture)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    public class VariableSettingUsageTooltipConverter : IMultiValueConverter
+    {
+        public object Convert(object[] values, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            var key = values.Length > 0 ? values[0]?.ToString() ?? string.Empty : string.Empty;
+            var value = values.Length > 1 ? values[1]?.ToString() ?? string.Empty : string.Empty;
+            if (!MainWindow.IsVariableSettingKey(key))
+            {
+                return string.Empty;
+            }
+
+            if (Application.Current?.MainWindow is not MainWindow window)
+            {
+                return string.Empty;
+            }
+
+            return window.GetVariableUsageTooltip(value);
+        }
+
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, System.Globalization.CultureInfo culture)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
     public class ProjectFileModel
     {
         public int Version { get; set; } = 1;
@@ -341,6 +430,8 @@ namespace Test_Automation
             "OAuth2"
         };
 
+        public ObservableCollection<string> EnvironmentOptions { get; } = new ObservableCollection<string>();
+
         public ObservableCollection<string> HttpMethodOptions { get; } = new ObservableCollection<string>
         {
             "GET",
@@ -353,6 +444,12 @@ namespace Test_Automation
         };
 
         private PlanNode? _selectedNode;
+        private string _selectedEnvironment = string.Empty;
+        private bool _isSyncingEnvironment;
+        private bool _isRefreshingEnvironmentOptions;
+        private bool _isNormalizingVariables;
+        private int _variableUsageVersion;
+        private Dictionary<string, List<string>> _variableUsageMap = new(StringComparer.OrdinalIgnoreCase);
         private string _jsonPreview = "{}";
         private string _previewRequest = "Select a component to see request preview.";
         private string _previewResponse = "Select a component to see response preview.";
@@ -443,6 +540,22 @@ namespace Test_Automation
         public bool IsVariableExtractorSelected => SelectedNode?.Type == "VariableExtractor";
         public bool IsScriptSelected => SelectedNode?.Type == "Script";
 
+        public IEnumerable<NodeSetting> ProjectVariablesForEditor =>
+            SelectedNode?.Type == "Project"
+                ? SelectedNode.Variables.Where(variable => !string.Equals(variable.Key, "env", StringComparison.OrdinalIgnoreCase))
+                : Enumerable.Empty<NodeSetting>();
+
+        public int VariableUsageVersion
+        {
+            get => _variableUsageVersion;
+            private set
+            {
+                if (_variableUsageVersion == value) return;
+                _variableUsageVersion = value;
+                OnPropertyChanged();
+            }
+        }
+
         public string ProjectDescription
         {
             get => GetSettingValue("Description", string.Empty);
@@ -452,7 +565,39 @@ namespace Test_Automation
         public string ProjectEnvironment
         {
             get => GetSettingValue("Environment", "dev");
-            set => SetSettingValue("Environment", value);
+            set
+            {
+                SetSettingValue("Environment", value);
+                RefreshEnvironmentOptions();
+            }
+        }
+
+        public string SelectedEnvironment
+        {
+            get => _selectedEnvironment;
+            set
+            {
+                var next = value ?? string.Empty;
+                if (string.Equals(_selectedEnvironment, next, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _selectedEnvironment = next;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HttpUrlResolved));
+
+                if (_isSyncingEnvironment)
+                {
+                    return;
+                }
+
+                if (SetProjectVariable("env", _selectedEnvironment))
+                {
+                    UpdateProjectVariablesPreview();
+                    RefreshJsonPreview();
+                }
+            }
         }
 
         public string HttpMethod
@@ -466,6 +611,8 @@ namespace Test_Automation
             get => GetSettingValue("Url", string.Empty);
             set => SetSettingValue("Url", value);
         }
+
+        public string HttpUrlResolved => ResolveWithProjectVariables(HttpUrl);
 
         public string HttpBody
         {
@@ -768,6 +915,8 @@ namespace Test_Automation
             InitializeComponent();
             DataContext = this;
             RootNodes.CollectionChanged += RootNodes_CollectionChanged;
+            RefreshEnvironmentOptions();
+            RebuildVariableUsageMap();
             RefreshJsonPreview();
         }
 
@@ -784,6 +933,7 @@ namespace Test_Automation
                 var root = new PlanNode("Project", "Project");
                 RootNodes.Add(root);
                 SelectedNode = root;
+                RefreshEnvironmentOptions();
                 RefreshJsonPreview();
                 UpdateProjectVariablesPreview();
             }
@@ -863,6 +1013,7 @@ namespace Test_Automation
                 RootNodes.Clear();
                 RootNodes.Add(root);
                 SelectedNode = root;
+                RefreshEnvironmentOptions();
                 RefreshJsonPreview();
                 UpdateProjectVariablesPreview();
             }
@@ -1081,6 +1232,129 @@ namespace Test_Automation
             }
         }
 
+        private void RefreshEnvironmentOptions()
+        {
+            if (_isRefreshingEnvironmentOptions)
+            {
+                return;
+            }
+
+            _isRefreshingEnvironmentOptions = true;
+            _isSyncingEnvironment = true;
+            try
+            {
+                var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
+                var environmentText = GetProjectSettingValue(projectNode, "Environment", "dev");
+                var parsedOptions = environmentText
+                    .Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(option => option.Trim())
+                    .Where(option => !string.IsNullOrWhiteSpace(option))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (parsedOptions.Count == 0)
+                {
+                    parsedOptions.Add("dev");
+                }
+
+                var optionsUnchanged = EnvironmentOptions.Count == parsedOptions.Count
+                    && EnvironmentOptions.Zip(parsedOptions, (current, next) => string.Equals(current, next, StringComparison.OrdinalIgnoreCase)).All(match => match);
+
+                if (!optionsUnchanged)
+                {
+                    EnvironmentOptions.Clear();
+                    foreach (var option in parsedOptions)
+                    {
+                        EnvironmentOptions.Add(option);
+                    }
+                }
+
+                var envVariable = GetProjectVariableValue(projectNode, "env", string.Empty);
+                var selected = _selectedEnvironment;
+
+                if (string.IsNullOrWhiteSpace(selected)
+                    || !parsedOptions.Any(option => string.Equals(option, selected, StringComparison.OrdinalIgnoreCase)))
+                {
+                    selected = envVariable;
+                }
+
+                if (!parsedOptions.Any(option => string.Equals(option, selected, StringComparison.OrdinalIgnoreCase)))
+                {
+                    selected = parsedOptions[0];
+                }
+
+                if (!string.Equals(_selectedEnvironment, selected, StringComparison.Ordinal))
+                {
+                    _selectedEnvironment = selected;
+                    OnPropertyChanged(nameof(SelectedEnvironment));
+                    OnPropertyChanged(nameof(HttpUrlResolved));
+                }
+
+                if (SetProjectVariable("env", selected))
+                {
+                    UpdateProjectVariablesPreview();
+                }
+            }
+            finally
+            {
+                _isSyncingEnvironment = false;
+                _isRefreshingEnvironmentOptions = false;
+            }
+        }
+
+        private string GetProjectSettingValue(PlanNode? projectNode, string key, string fallback)
+        {
+            if (projectNode == null)
+            {
+                return fallback;
+            }
+
+            var setting = projectNode.Settings.FirstOrDefault(current => string.Equals(current.Key, key, StringComparison.OrdinalIgnoreCase));
+            return string.IsNullOrWhiteSpace(setting?.Value) ? fallback : setting.Value;
+        }
+
+        private string GetProjectVariableValue(PlanNode? projectNode, string key, string fallback)
+        {
+            if (projectNode == null)
+            {
+                return fallback;
+            }
+
+            var variable = projectNode.Variables.FirstOrDefault(current => string.Equals(current.Key, key, StringComparison.OrdinalIgnoreCase));
+            return variable?.Value ?? fallback;
+        }
+
+        private bool SetProjectVariable(string key, string value)
+        {
+            var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
+            if (projectNode == null || string.IsNullOrWhiteSpace(key))
+            {
+                return false;
+            }
+
+            var existing = projectNode.Variables.FirstOrDefault(variable => string.Equals(variable.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (existing == null)
+            {
+                projectNode.Variables.Add(new NodeSetting(key, value));
+                return true;
+            }
+
+            var changed = false;
+            if (!string.Equals(existing.Key, key, StringComparison.Ordinal))
+            {
+                existing.Key = key;
+                changed = true;
+            }
+
+            if (!string.Equals(existing.Value, value, StringComparison.Ordinal))
+            {
+                existing.Value = value;
+                changed = true;
+            }
+
+            return changed;
+        }
+
         private void UpdateProjectVariablesPreview()
         {
             var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
@@ -1090,9 +1364,8 @@ namespace Test_Automation
                 return;
             }
 
-            var variables = projectNode.Variables
-                .Where(variable => !string.IsNullOrWhiteSpace(variable.Key))
-                .ToDictionary(variable => variable.Key, variable => (object)variable.Value);
+            var variables = BuildDictionaryWithOverwrite(projectNode.Variables)
+                .ToDictionary(entry => entry.Key, entry => (object)entry.Value, StringComparer.OrdinalIgnoreCase);
 
             var context = _lastExecutionContext ?? new Test_Automation.Models.ExecutionContext();
             foreach (var entry in variables)
@@ -1345,7 +1618,7 @@ namespace Test_Automation
                 return;
             }
 
-            SelectedNode.Variables.Add(new NodeSetting("Key", "Value"));
+            SelectedNode.Variables.Add(new NodeSetting("var", "Value"));
             RefreshJsonPreview();
         }
 
@@ -1762,6 +2035,8 @@ namespace Test_Automation
             }
 
             RefreshJsonPreview();
+            RefreshEnvironmentOptions();
+            RebuildVariableUsageMap();
         }
 
         private void NodeChildren_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -1783,6 +2058,7 @@ namespace Test_Automation
             }
 
             RefreshJsonPreview();
+            RebuildVariableUsageMap();
         }
 
         private void NodeSettings_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -1805,10 +2081,18 @@ namespace Test_Automation
 
             RebuildExtractorSourceOptions();
             RefreshJsonPreview();
+            RefreshEnvironmentOptions();
+            RebuildVariableUsageMap();
         }
 
         private void NodeVariables_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
+            var node = FindNodeByVariablesCollection(sender);
+            if (node != null)
+            {
+                NormalizeDuplicateVariables(node);
+            }
+
             if (e.OldItems != null)
             {
                 foreach (var item in e.OldItems.OfType<NodeSetting>())
@@ -1826,7 +2110,14 @@ namespace Test_Automation
             }
 
             RefreshJsonPreview();
-            UpdateProjectVariablesPreview();
+            if (node != null && string.Equals(node.Type, "Project", StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateProjectVariablesPreview();
+                RefreshEnvironmentOptions();
+                OnPropertyChanged(nameof(HttpUrlResolved));
+            }
+            RebuildVariableUsageMap();
+            OnPropertyChanged(nameof(ProjectVariablesForEditor));
         }
 
         private void NodeExtractors_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -1848,12 +2139,14 @@ namespace Test_Automation
             }
 
             RefreshJsonPreview();
+            RebuildVariableUsageMap();
         }
 
         private void PlanNode_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             NotifySelectedNodeEditorProperties();
             RefreshJsonPreview();
+            RebuildVariableUsageMap();
         }
 
         private void NodeSetting_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1861,18 +2154,76 @@ namespace Test_Automation
             NotifySelectedNodeEditorProperties();
             RebuildExtractorSourceOptions();
             RefreshJsonPreview();
+
+            var shouldRebuildVariableMap = false;
+            if (sender is NodeSetting changedSetting)
+            {
+                var ownerNode = RootNodes
+                    .Select(root => FindNodeContainingSetting(root, changedSetting))
+                    .FirstOrDefault(found => found != null);
+
+                if (ownerNode != null
+                    && string.Equals(ownerNode.Type, "Project", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(changedSetting.Key, "Environment", StringComparison.OrdinalIgnoreCase))
+                {
+                    RefreshEnvironmentOptions();
+                }
+
+                shouldRebuildVariableMap = e.PropertyName == nameof(NodeSetting.Key)
+                    || (e.PropertyName == nameof(NodeSetting.Value) && IsVariableSettingKey(changedSetting.Key));
+            }
+
+            if (shouldRebuildVariableMap)
+            {
+                RebuildVariableUsageMap();
+            }
         }
 
         private void NodeVariableSetting_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
+            var shouldRebuildVariableMap = false;
+            PlanNode? ownerNode = null;
+            if (sender is NodeSetting variable)
+            {
+                ownerNode = RootNodes
+                    .Select(root => FindNodeContainingVariable(root, variable))
+                    .FirstOrDefault(found => found != null);
+
+                if (ownerNode != null)
+                {
+                    if (e.PropertyName == nameof(NodeSetting.Key))
+                    {
+                        NormalizeDuplicateVariables(ownerNode, variable);
+                        shouldRebuildVariableMap = true;
+                    }
+                }
+            }
+
             RefreshJsonPreview();
-            UpdateProjectVariablesPreview();
+            if (ownerNode != null && string.Equals(ownerNode.Type, "Project", StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateProjectVariablesPreview();
+                OnPropertyChanged(nameof(HttpUrlResolved));
+                if (string.Equals((sender as NodeSetting)?.Key, "env", StringComparison.OrdinalIgnoreCase)
+                    || e.PropertyName == nameof(NodeSetting.Key))
+                {
+                    RefreshEnvironmentOptions();
+                }
+            }
+
+            if (shouldRebuildVariableMap)
+            {
+                RebuildVariableUsageMap();
+            }
+
+            OnPropertyChanged(nameof(ProjectVariablesForEditor));
         }
 
         private void NodeExtractor_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             NotifySelectedNodeEditorProperties();
             RefreshJsonPreview();
+            RebuildVariableUsageMap();
         }
 
         private void RefreshJsonPreview()
@@ -1904,7 +2255,10 @@ namespace Test_Automation
             if (nodeType == "Http")
             {
                 var method = GetSettingValue("Method", "GET");
-                var url = GetSettingValue("Url", "https://api.example.com");
+                var url = ResolveWithProjectVariables(GetSettingValue("Url", "https://api.example.com"));
+                var latestHttpExecution = GetExecutionResults(nodeId)
+                    .OrderByDescending(result => result.EndTime ?? result.StartTime)
+                    .FirstOrDefault();
                 var lastHttp = GetLastExecutionData<HttpData>(nodeId);
                 var httpRequestRuns = GetExecutionResults(nodeId)
                     .Where(result => result.Data is HttpData)
@@ -1930,6 +2284,35 @@ namespace Test_Automation
                         responseBody = (result.Data as HttpData)?.ResponseBody
                     })
                     .ToList();
+
+                if (latestHttpExecution != null
+                    && latestHttpExecution.Data is not HttpData
+                    && string.Equals(latestHttpExecution.Status, "failed", StringComparison.OrdinalIgnoreCase))
+                {
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        component = nodeName,
+                        type = "Http",
+                        method,
+                        url,
+                        status = latestHttpExecution.Status,
+                        error = latestHttpExecution.Error,
+                        threadIndex = latestHttpExecution.ThreadIndex,
+                        durationMs = latestHttpExecution.DurationMs
+                    }, new JsonSerializerOptions { WriteIndented = true });
+
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        status = latestHttpExecution.Status,
+                        error = latestHttpExecution.Error,
+                        message = "Request failed before receiving an HTTP response."
+                    }, new JsonSerializerOptions { WriteIndented = true });
+
+                    PreviewLogs = $"[{now}] HTTP preview refreshed\n[{now}] Target: {method} {url}\n[{now}] Last run failed: {latestHttpExecution.Error}";
+                    AppendExtractionPreview(now);
+                    return;
+                }
+
                 if (httpRequestRuns.Count > 0)
                 {
                     PreviewRequest = JsonSerializer.Serialize(new
@@ -1984,6 +2367,9 @@ namespace Test_Automation
                 var endpoint = GetSettingValue("Endpoint", "https://api.example.com/graphql");
                 var query = GetSettingValue("Query", "query { health }");
                 var variables = GetSettingValue("Variables", "{}");
+                var latestGraphExecution = GetExecutionResults(nodeId)
+                    .OrderByDescending(result => result.EndTime ?? result.StartTime)
+                    .FirstOrDefault();
                 var lastGraphQl = GetLastExecutionData<GraphQlData>(nodeId);
                 var graphRequestRuns = GetExecutionResults(nodeId)
                     .Where(result => result.Data is GraphQlData)
@@ -2009,6 +2395,36 @@ namespace Test_Automation
                         responseBody = (result.Data as GraphQlData)?.ResponseBody
                     })
                     .ToList();
+
+                if (latestGraphExecution != null
+                    && latestGraphExecution.Data is not GraphQlData
+                    && string.Equals(latestGraphExecution.Status, "failed", StringComparison.OrdinalIgnoreCase))
+                {
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        component = nodeName,
+                        type = "GraphQl",
+                        endpoint,
+                        query,
+                        variables,
+                        status = latestGraphExecution.Status,
+                        error = latestGraphExecution.Error,
+                        threadIndex = latestGraphExecution.ThreadIndex,
+                        durationMs = latestGraphExecution.DurationMs
+                    }, new JsonSerializerOptions { WriteIndented = true });
+
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        status = latestGraphExecution.Status,
+                        error = latestGraphExecution.Error,
+                        message = "Request failed before receiving a GraphQL response."
+                    }, new JsonSerializerOptions { WriteIndented = true });
+
+                    PreviewLogs = $"[{now}] GraphQL preview refreshed\n[{now}] Endpoint: {endpoint}\n[{now}] Last run failed: {latestGraphExecution.Error}";
+                    AppendExtractionPreview(now);
+                    return;
+                }
+
                 if (graphRequestRuns.Count > 0)
                 {
                     PreviewRequest = JsonSerializer.Serialize(new
@@ -2062,6 +2478,9 @@ namespace Test_Automation
             {
                 var connection = GetSettingValue("Connection", "Server=.;Database=master;Trusted_Connection=True;");
                 var query = GetSettingValue("Query", "SELECT 1");
+                var latestSqlExecution = GetExecutionResults(nodeId)
+                    .OrderByDescending(result => result.EndTime ?? result.StartTime)
+                    .FirstOrDefault();
                 var lastSql = GetLastExecutionData<SqlData>(nodeId);
                 var sqlRequestRuns = GetExecutionResults(nodeId)
                     .Where(result => result.Data is SqlData)
@@ -2084,6 +2503,35 @@ namespace Test_Automation
                         rows = (result.Data as SqlData)?.QueryResult
                     })
                     .ToList();
+
+                if (latestSqlExecution != null
+                    && latestSqlExecution.Data is not SqlData
+                    && string.Equals(latestSqlExecution.Status, "failed", StringComparison.OrdinalIgnoreCase))
+                {
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        component = nodeName,
+                        type = "Sql",
+                        connection,
+                        query,
+                        status = latestSqlExecution.Status,
+                        error = latestSqlExecution.Error,
+                        threadIndex = latestSqlExecution.ThreadIndex,
+                        durationMs = latestSqlExecution.DurationMs
+                    }, new JsonSerializerOptions { WriteIndented = true });
+
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        status = latestSqlExecution.Status,
+                        error = latestSqlExecution.Error,
+                        message = "Execution failed before returning SQL data."
+                    }, new JsonSerializerOptions { WriteIndented = true });
+
+                    PreviewLogs = $"[{now}] SQL preview refreshed\n[{now}] Executing: {query}\n[{now}] Last run failed: {latestSqlExecution.Error}";
+                    AppendExtractionPreview(now);
+                    return;
+                }
+
                 if (sqlRequestRuns.Count > 0)
                 {
                     PreviewRequest = JsonSerializer.Serialize(new
@@ -2177,6 +2625,9 @@ namespace Test_Automation
             {
                 var language = GetSettingValue("Language", "CSharp");
                 var code = GetSettingValue("Code", string.Empty);
+                var latestScriptExecution = GetExecutionResults(nodeId)
+                    .OrderByDescending(result => result.EndTime ?? result.StartTime)
+                    .FirstOrDefault();
                 var scriptRequestRuns = GetExecutionResults(nodeId)
                     .Select(result => new
                     {
@@ -2197,6 +2648,35 @@ namespace Test_Automation
                         error = result.Error
                     })
                     .ToList();
+
+                if (latestScriptExecution != null
+                    && latestScriptExecution.Data is not ScriptData
+                    && string.Equals(latestScriptExecution.Status, "failed", StringComparison.OrdinalIgnoreCase))
+                {
+                    PreviewRequest = JsonSerializer.Serialize(new
+                    {
+                        component = nodeName,
+                        type = "Script",
+                        language,
+                        code,
+                        status = latestScriptExecution.Status,
+                        error = latestScriptExecution.Error,
+                        threadIndex = latestScriptExecution.ThreadIndex,
+                        durationMs = latestScriptExecution.DurationMs
+                    }, new JsonSerializerOptions { WriteIndented = true });
+
+                    PreviewResponse = JsonSerializer.Serialize(new
+                    {
+                        status = latestScriptExecution.Status,
+                        error = latestScriptExecution.Error,
+                        message = "Script failed before returning execution data."
+                    }, new JsonSerializerOptions { WriteIndented = true });
+
+                    PreviewLogs = $"[{now}] Script preview refreshed\n[{now}] Last run failed: {latestScriptExecution.Error}";
+                    AppendExtractionPreview(now);
+                    return;
+                }
+
                 if (scriptRequestRuns.Count > 0)
                 {
                     PreviewRequest = JsonSerializer.Serialize(new
@@ -2251,6 +2731,37 @@ namespace Test_Automation
                     data = result.Data
                 })
                 .ToList();
+            var latestGenericExecution = GetExecutionResults(nodeId)
+                .OrderByDescending(result => result.EndTime ?? result.StartTime)
+                .FirstOrDefault();
+
+            if (latestGenericExecution != null
+                && latestGenericExecution.Data == null
+                && string.Equals(latestGenericExecution.Status, "failed", StringComparison.OrdinalIgnoreCase))
+            {
+                PreviewRequest = JsonSerializer.Serialize(new
+                {
+                    component = nodeName,
+                    type = nodeType,
+                    settings,
+                    status = latestGenericExecution.Status,
+                    error = latestGenericExecution.Error,
+                    threadIndex = latestGenericExecution.ThreadIndex,
+                    durationMs = latestGenericExecution.DurationMs
+                }, new JsonSerializerOptions { WriteIndented = true });
+
+                PreviewResponse = JsonSerializer.Serialize(new
+                {
+                    status = latestGenericExecution.Status,
+                    error = latestGenericExecution.Error,
+                    message = "Execution failed before returning component data."
+                }, new JsonSerializerOptions { WriteIndented = true });
+
+                PreviewLogs = $"[{now}] {nodeType} preview refreshed.\n[{now}] Last run failed: {latestGenericExecution.Error}";
+                AppendExtractionPreview(now);
+                return;
+            }
+
             if (genericRuns.Count > 0)
             {
                 PreviewRequest = JsonSerializer.Serialize(new
@@ -2599,13 +3110,9 @@ namespace Test_Automation
 
         private static object BuildNodeObject(PlanNode node)
         {
-            var settings = node.Settings
-                .Where(setting => !string.IsNullOrWhiteSpace(setting.Key))
-                .ToDictionary(setting => setting.Key, setting => setting.Value);
+            var settings = BuildDictionaryWithOverwrite(node.Settings);
 
-            var variables = node.Variables
-                .Where(variable => !string.IsNullOrWhiteSpace(variable.Key))
-                .ToDictionary(variable => variable.Key, variable => variable.Value);
+            var variables = BuildDictionaryWithOverwrite(node.Variables);
 
             var extractors = node.Extractors
                 .Where(extractor => !string.IsNullOrWhiteSpace(extractor.Source) || !string.IsNullOrWhiteSpace(extractor.VariableName))
@@ -2637,12 +3144,8 @@ namespace Test_Automation
                 Type = node.Type,
                 Name = node.Name,
                 Enabled = node.IsEnabled,
-                Settings = node.Settings
-                    .Where(setting => !string.IsNullOrWhiteSpace(setting.Key))
-                    .ToDictionary(setting => setting.Key, setting => setting.Value),
-                Variables = node.Variables
-                    .Where(variable => !string.IsNullOrWhiteSpace(variable.Key))
-                    .ToDictionary(variable => variable.Key, variable => variable.Value),
+                Settings = BuildDictionaryWithOverwrite(node.Settings),
+                Variables = BuildDictionaryWithOverwrite(node.Variables),
                 Extractors = node.Extractors
                     .Where(extractor => !string.IsNullOrWhiteSpace(extractor.Source) || !string.IsNullOrWhiteSpace(extractor.VariableName))
                     .Select(extractor => new VariableExtractionFileModel
@@ -2726,6 +3229,295 @@ namespace Test_Automation
             RefreshJsonPreview();
         }
 
+        public string GetVariableUniquenessLabel(string variableName)
+        {
+            if (string.IsNullOrWhiteSpace(variableName))
+            {
+                return string.Empty;
+            }
+
+            if (!_variableUsageMap.TryGetValue(variableName.Trim(), out var paths) || paths.Count == 0)
+            {
+                return "Unique";
+            }
+
+            return paths.Count > 1 ? $"Repeated ({paths.Count})" : "Unique";
+        }
+
+        public string GetVariableUsageTooltip(string variableName)
+        {
+            if (string.IsNullOrWhiteSpace(variableName))
+            {
+                return "Variable name is empty.";
+            }
+
+            if (!_variableUsageMap.TryGetValue(variableName.Trim(), out var paths) || paths.Count == 0)
+            {
+                return "No usage path found.";
+            }
+
+            return string.Join("\n", paths);
+        }
+
+        private void RebuildVariableUsageMap()
+        {
+            var map = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var root in RootNodes)
+            {
+                BuildVariableUsageMap(root, map);
+            }
+
+            _variableUsageMap = map;
+            VariableUsageVersion++;
+        }
+
+        private static void BuildVariableUsageMap(PlanNode node, Dictionary<string, List<string>> map)
+        {
+            var path = BuildNodePath(node);
+
+            foreach (var variable in node.Variables)
+            {
+                AddVariableUsage(map, variable.Key, path);
+            }
+
+            foreach (var setting in node.Settings)
+            {
+                if (IsVariableSettingKey(setting.Key))
+                {
+                    AddVariableUsage(map, setting.Value, $"{path} -> {setting.Key}");
+                }
+            }
+
+            foreach (var extractor in node.Extractors)
+            {
+                AddVariableUsage(map, extractor.VariableName, $"{path} -> Extractor");
+            }
+
+            if (string.Equals(node.Type, "VariableExtractor", StringComparison.OrdinalIgnoreCase))
+            {
+                var variableNameSetting = node.Settings.FirstOrDefault(setting => string.Equals(setting.Key, "VariableName", StringComparison.OrdinalIgnoreCase));
+                AddVariableUsage(map, variableNameSetting?.Value, path);
+            }
+
+            foreach (var child in node.Children)
+            {
+                BuildVariableUsageMap(child, map);
+            }
+        }
+
+        private static void AddVariableUsage(Dictionary<string, List<string>> map, string? variableName, string path)
+        {
+            if (string.IsNullOrWhiteSpace(variableName))
+            {
+                return;
+            }
+
+            var key = variableName.Trim();
+            if (!map.TryGetValue(key, out var paths))
+            {
+                paths = new List<string>();
+                map[key] = paths;
+            }
+
+            if (!paths.Contains(path, StringComparer.OrdinalIgnoreCase))
+            {
+                paths.Add(path);
+            }
+        }
+
+        private static string BuildNodePath(PlanNode node)
+        {
+            var parts = new List<string>();
+            var current = node;
+            while (current != null)
+            {
+                if (!string.Equals(current.Type, "Project", StringComparison.OrdinalIgnoreCase))
+                {
+                    parts.Add(current.Name);
+                }
+
+                current = current.Parent;
+            }
+
+            parts.Reverse();
+            return parts.Count == 0 ? "Project" : string.Join("->", parts);
+        }
+
+        private static Dictionary<string, string> BuildDictionaryWithOverwrite(IEnumerable<NodeSetting> source)
+        {
+            var dictionary = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in source)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Key))
+                {
+                    continue;
+                }
+
+                dictionary[entry.Key.Trim()] = entry.Value;
+            }
+
+            return dictionary;
+        }
+
+        private string ResolveWithProjectVariables(string template)
+        {
+            if (string.IsNullOrEmpty(template))
+            {
+                return template;
+            }
+
+            var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
+            var variables = projectNode != null
+                ? BuildDictionaryWithOverwrite(projectNode.Variables)
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            if (!string.IsNullOrWhiteSpace(SelectedEnvironment))
+            {
+                variables["env"] = SelectedEnvironment;
+            }
+
+            return System.Text.RegularExpressions.Regex.Replace(template, "\\$\\{([^}]+)\\}", match =>
+            {
+                var key = match.Groups[1].Value;
+                return variables.TryGetValue(key, out var value) ? value : match.Value;
+            });
+        }
+
+        private void NormalizeDuplicateVariables(PlanNode node, NodeSetting? preferred = null)
+        {
+            if (_isNormalizingVariables)
+            {
+                return;
+            }
+
+            _isNormalizingVariables = true;
+            try
+            {
+                if (preferred != null && !string.IsNullOrWhiteSpace(preferred.Key))
+                {
+                    var duplicates = node.Variables
+                        .Where(variable => !ReferenceEquals(variable, preferred)
+                            && string.Equals(variable.Key, preferred.Key, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                    foreach (var duplicate in duplicates)
+                    {
+                        node.Variables.Remove(duplicate);
+                    }
+                }
+
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (var index = node.Variables.Count - 1; index >= 0; index--)
+                {
+                    var variable = node.Variables[index];
+                    if (string.IsNullOrWhiteSpace(variable.Key))
+                    {
+                        continue;
+                    }
+
+                    var key = variable.Key.Trim();
+                    if (!seen.Add(key))
+                    {
+                        node.Variables.RemoveAt(index);
+                    }
+                    else if (!string.Equals(variable.Key, key, StringComparison.Ordinal))
+                    {
+                        variable.Key = key;
+                    }
+                }
+            }
+            finally
+            {
+                _isNormalizingVariables = false;
+            }
+        }
+
+        private PlanNode? FindNodeByVariablesCollection(object? sender)
+        {
+            if (sender is not ObservableCollection<NodeSetting> variables)
+            {
+                return null;
+            }
+
+            foreach (var root in RootNodes)
+            {
+                var found = FindNodeByVariablesCollection(root, variables);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+
+        private static PlanNode? FindNodeByVariablesCollection(PlanNode node, ObservableCollection<NodeSetting> variables)
+        {
+            if (ReferenceEquals(node.Variables, variables))
+            {
+                return node;
+            }
+
+            foreach (var child in node.Children)
+            {
+                var found = FindNodeByVariablesCollection(child, variables);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+
+        private static PlanNode? FindNodeContainingVariable(PlanNode node, NodeSetting variable)
+        {
+            if (node.Variables.Contains(variable))
+            {
+                return node;
+            }
+
+            foreach (var child in node.Children)
+            {
+                var found = FindNodeContainingVariable(child, variable);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+
+        private static PlanNode? FindNodeContainingSetting(PlanNode node, NodeSetting setting)
+        {
+            if (node.Settings.Contains(setting))
+            {
+                return node;
+            }
+
+            foreach (var child in node.Children)
+            {
+                var found = FindNodeContainingSetting(child, setting);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+
+        public static bool IsVariableSettingKey(string? key)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return false;
+            }
+
+            return key.Contains("Variable", StringComparison.OrdinalIgnoreCase);
+        }
+
         private void NotifySelectedNodeEditorProperties()
         {
             OnPropertyChanged(nameof(IsProjectSelected));
@@ -2741,11 +3533,14 @@ namespace Test_Automation
             OnPropertyChanged(nameof(IsAssertSelected));
             OnPropertyChanged(nameof(IsVariableExtractorSelected));
             OnPropertyChanged(nameof(IsScriptSelected));
+            OnPropertyChanged(nameof(ProjectVariablesForEditor));
 
             OnPropertyChanged(nameof(ProjectDescription));
             OnPropertyChanged(nameof(ProjectEnvironment));
+            OnPropertyChanged(nameof(SelectedEnvironment));
             OnPropertyChanged(nameof(HttpMethod));
             OnPropertyChanged(nameof(HttpUrl));
+            OnPropertyChanged(nameof(HttpUrlResolved));
             OnPropertyChanged(nameof(HttpBody));
             OnPropertyChanged(nameof(HttpHeaders));
             OnPropertyChanged(nameof(HttpAuthType));

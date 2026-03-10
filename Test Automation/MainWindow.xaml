@@ -8,6 +8,10 @@
         Title="Test Automation" Height="650" Width="1100">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <local:VariableUsageLabelConverter x:Key="VariableUsageLabelConverter" />
+        <local:VariableUsageTooltipConverter x:Key="VariableUsageTooltipConverter" />
+        <local:VariableSettingUsageLabelConverter x:Key="VariableSettingUsageLabelConverter" />
+        <local:VariableSettingUsageTooltipConverter x:Key="VariableSettingUsageTooltipConverter" />
     </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -42,6 +46,12 @@
                     Width="120"
                     Content="Run TestPlan"
                     Click="RunTestPlanButton_Click" />
+            </StackPanel>
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                <TextBlock VerticalAlignment="Center" Text="Environment" Margin="0,0,8,0" />
+                <ComboBox Width="170"
+                          ItemsSource="{Binding EnvironmentOptions}"
+                          SelectedItem="{Binding SelectedEnvironment, UpdateSourceTrigger=PropertyChanged}" />
             </StackPanel>
 
                 <TreeView x:Name="PlanTreeView"
@@ -151,11 +161,11 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Environment" />
-                                <TextBox Grid.Column="1" Text="{Binding ProjectEnvironment, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBox Grid.Column="1" Text="{Binding ProjectEnvironment, UpdateSourceTrigger=PropertyChanged}" ToolTip="Use comma, semicolon, or new line to define dropdown options." />
                             </Grid>
                             <TextBlock Text="Variables" FontWeight="SemiBold" Margin="0,10,0,6" />
                             <ScrollViewer Height="120" VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding SelectedNode.Variables}">
+                                <ItemsControl ItemsSource="{Binding ProjectVariablesForEditor}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Grid Margin="0,0,0,6">
@@ -163,10 +173,25 @@
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBox Grid.Column="0" Margin="0,0,6,0" Text="{Binding Key, UpdateSourceTrigger=PropertyChanged}" />
-                                                <TextBox Grid.Column="1" Margin="0,0,6,0" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
-                                                <Button Grid.Column="2" Content="X" Width="26" Height="24" Click="RemoveProjectVariableButton_Click" />
+                                                <TextBox Grid.Column="0" Margin="0,0,6,0" Text="{Binding Key, UpdateSourceTrigger=LostFocus}" />
+                                                <TextBox Grid.Column="1" Margin="0,0,6,0" Text="{Binding Value, UpdateSourceTrigger=LostFocus}" />
+                                                <TextBlock Grid.Column="2" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#666666">
+                                                    <TextBlock.Text>
+                                                        <MultiBinding Converter="{StaticResource VariableUsageLabelConverter}">
+                                                            <Binding Path="Key" />
+                                                            <Binding Path="DataContext.VariableUsageVersion" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                        </MultiBinding>
+                                                    </TextBlock.Text>
+                                                    <TextBlock.ToolTip>
+                                                        <MultiBinding Converter="{StaticResource VariableUsageTooltipConverter}">
+                                                            <Binding Path="Key" />
+                                                            <Binding Path="DataContext.VariableUsageVersion" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                        </MultiBinding>
+                                                    </TextBlock.ToolTip>
+                                                </TextBlock>
+                                                <Button Grid.Column="3" Content="X" Width="26" Height="24" Click="RemoveProjectVariableButton_Click" />
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
@@ -198,8 +223,16 @@
                                     <ColumnDefinition Width="100" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="URL" />
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="URL Template" />
                                 <TextBox Grid.Column="1" Text="{Binding HttpUrl, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <Grid Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Resolved URL" />
+                                <TextBox Grid.Column="1" Text="{Binding HttpUrlResolved, Mode=OneWay}" IsReadOnly="True" />
                             </Grid>
                             <Grid Margin="0,6,0,0">
                                 <Grid.ColumnDefinitions>
@@ -655,9 +688,24 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="100" />
                                     <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Variable" />
-                                <TextBox Grid.Column="1" Text="{Binding ExtractorVariableName, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBox Grid.Column="1" Text="{Binding ExtractorVariableName, UpdateSourceTrigger=LostFocus}" Margin="0,0,6,0" />
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="#666666">
+                                    <TextBlock.Text>
+                                        <MultiBinding Converter="{StaticResource VariableUsageLabelConverter}">
+                                            <Binding Path="ExtractorVariableName" />
+                                            <Binding Path="VariableUsageVersion" />
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                    <TextBlock.ToolTip>
+                                        <MultiBinding Converter="{StaticResource VariableUsageTooltipConverter}">
+                                            <Binding Path="ExtractorVariableName" />
+                                            <Binding Path="VariableUsageVersion" />
+                                        </MultiBinding>
+                                    </TextBlock.ToolTip>
+                                </TextBlock>
                             </Grid>
                         </StackPanel>
                     </Border>
@@ -720,7 +768,27 @@
                                                           IsTextSearchEnabled="True"
                                                           Text="{Binding Source, UpdateSourceTrigger=PropertyChanged}" />
                                                 <TextBox Grid.Column="1" Margin="0,0,6,0" Text="{Binding JsonPath, UpdateSourceTrigger=PropertyChanged}" />
-                                                <TextBox Grid.Column="2" Margin="0,0,6,0" Text="{Binding VariableName, UpdateSourceTrigger=PropertyChanged}" />
+                                                <Grid Grid.Column="2" Margin="0,0,6,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox Grid.Column="0" Margin="0,0,6,0" Text="{Binding VariableName, UpdateSourceTrigger=LostFocus}" />
+                                                    <TextBlock Grid.Column="1" VerticalAlignment="Center" Foreground="#666666">
+                                                        <TextBlock.Text>
+                                                            <MultiBinding Converter="{StaticResource VariableUsageLabelConverter}">
+                                                                <Binding Path="VariableName" />
+                                                                <Binding Path="DataContext.VariableUsageVersion" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                            </MultiBinding>
+                                                        </TextBlock.Text>
+                                                        <TextBlock.ToolTip>
+                                                            <MultiBinding Converter="{StaticResource VariableUsageTooltipConverter}">
+                                                                <Binding Path="VariableName" />
+                                                                <Binding Path="DataContext.VariableUsageVersion" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                            </MultiBinding>
+                                                        </TextBlock.ToolTip>
+                                                    </TextBlock>
+                                                </Grid>
                                                 <Button Grid.Column="3" Content="X" Width="26" Height="24" Click="RemoveExtractorButton_Click" />
                                             </Grid>
                                         </DataTemplate>
@@ -745,10 +813,27 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <TextBox Grid.Column="0" Margin="0,0,6,0" Text="{Binding Key, UpdateSourceTrigger=PropertyChanged}" />
                                         <TextBox Grid.Column="1" Margin="0,0,6,0" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
-                                        <Button Grid.Column="2" Content="X" Width="26" Height="24" Click="RemoveSettingButton_Click" />
+                                        <TextBlock Grid.Column="2" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#666666">
+                                            <TextBlock.Text>
+                                                <MultiBinding Converter="{StaticResource VariableSettingUsageLabelConverter}">
+                                                    <Binding Path="Key" />
+                                                    <Binding Path="Value" />
+                                                    <Binding Path="DataContext.VariableUsageVersion" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                            <TextBlock.ToolTip>
+                                                <MultiBinding Converter="{StaticResource VariableSettingUsageTooltipConverter}">
+                                                    <Binding Path="Key" />
+                                                    <Binding Path="Value" />
+                                                    <Binding Path="DataContext.VariableUsageVersion" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                </MultiBinding>
+                                            </TextBlock.ToolTip>
+                                        </TextBlock>
+                                        <Button Grid.Column="3" Content="X" Width="26" Height="24" Click="RemoveSettingButton_Click" />
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
