@@ -62,7 +62,21 @@ namespace Test_Automation.Componentes
             {
                 var requestBody = BuildGraphQlPayload(data.Query, data.Variables);
 
-                using var client = new HttpClient();
+                HttpClient client;
+                if (IsWindowsIntegratedAuth(Settings))
+                {
+                    var handler = new HttpClientHandler
+                    {
+                        UseDefaultCredentials = true,
+                        ClientCertificateOptions = ClientCertificateOption.Automatic
+                    };
+                    client = new HttpClient(handler);
+                }
+                else
+                {
+                    client = new HttpClient();
+                }
+
                 using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
                 {
                     Content = new StringContent(requestBody, Encoding.UTF8, "application/json")
@@ -110,6 +124,15 @@ namespace Test_Automation.Componentes
             return JsonSerializer.Serialize(payload);
         }
 
+        private static bool IsWindowsIntegratedAuth(Dictionary<string, string> settings)
+        {
+            if (!settings.TryGetValue("AuthType", out var authType) || string.IsNullOrWhiteSpace(authType))
+            {
+                return false;
+            }
+            return string.Equals(authType, "WindowsIntegrated", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static void ApplyAuthSettings(Dictionary<string, string> settings, Dictionary<string, string> headers, ref string endpoint)
         {
             if (!settings.TryGetValue("AuthType", out var authType) || string.IsNullOrWhiteSpace(authType))
@@ -130,6 +153,8 @@ namespace Test_Automation.Componentes
                     break;
                 case "OAuth2":
                     AddBearerAuth(settings, headers);
+                    break;
+                case "WindowsIntegrated":
                     break;
                 default:
                     break;

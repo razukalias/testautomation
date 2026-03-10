@@ -58,7 +58,21 @@ namespace Test_Automation.Componentes
 
             if (!string.IsNullOrWhiteSpace(url))
             {
-                using var client = new HttpClient();
+                HttpClient client;
+                if (IsWindowsIntegratedAuth(Settings))
+                {
+                    var handler = new HttpClientHandler
+                    {
+                        UseDefaultCredentials = true,
+                        ClientCertificateOptions = ClientCertificateOption.Automatic
+                    };
+                    client = new HttpClient(handler);
+                }
+                else
+                {
+                    client = new HttpClient();
+                }
+
                 using var request = new HttpRequestMessage(new HttpMethod(data.Method), url);
 
                 foreach (var header in data.Headers)
@@ -91,6 +105,15 @@ namespace Test_Automation.Componentes
                 || method.Equals("DELETE", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsWindowsIntegratedAuth(Dictionary<string, string> settings)
+        {
+            if (!settings.TryGetValue("AuthType", out var authType) || string.IsNullOrWhiteSpace(authType))
+            {
+                return false;
+            }
+            return string.Equals(authType, "WindowsIntegrated", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static void ApplyAuthSettings(Dictionary<string, string> settings, Dictionary<string, string> headers, ref string url)
         {
             if (!settings.TryGetValue("AuthType", out var authType) || string.IsNullOrWhiteSpace(authType))
@@ -111,6 +134,8 @@ namespace Test_Automation.Componentes
                     break;
                 case "OAuth2":
                     AddBearerAuth(settings, headers);
+                    break;
+                case "WindowsIntegrated":
                     break;
                 default:
                     break;
