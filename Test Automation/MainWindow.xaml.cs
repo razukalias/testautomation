@@ -33,6 +33,7 @@ namespace Test_Automation
         public Dictionary<string, string> Variables { get; set; } = new Dictionary<string, string>();
         public List<VariableExtractionFileModel> Extractors { get; set; } = new List<VariableExtractionFileModel>();
         public List<NodeFileModel> Children { get; set; } = new List<NodeFileModel>();
+        public List<EnvironmentFileModel> Environments { get; set; } = new List<EnvironmentFileModel>();
     }
 
     public class VariableExtractionFileModel
@@ -40,6 +41,56 @@ namespace Test_Automation
         public string Source { get; set; } = string.Empty;
         public string JsonPath { get; set; } = string.Empty;
         public string VariableName { get; set; } = string.Empty;
+    }
+
+    public class EnvironmentFileModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string BaseUrl { get; set; } = string.Empty;
+        public Dictionary<string, string> Variables { get; set; } = new Dictionary<string, string>();
+    }
+
+    public class EnvironmentProfile : INotifyPropertyChanged
+    {
+        private string _name;
+        private string _baseUrl;
+
+        public string Name
+        {
+            get => _name;
+            set
+            {
+                if (_name == value) return;
+                _name = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string BaseUrl
+        {
+            get => _baseUrl;
+            set
+            {
+                if (_baseUrl == value) return;
+                _baseUrl = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public ObservableCollection<NodeSetting> Variables { get; } = new ObservableCollection<NodeSetting>();
+
+        public EnvironmentProfile(string name, string baseUrl)
+        {
+            _name = name;
+            _baseUrl = baseUrl;
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 
     public class NodeSetting : INotifyPropertyChanged
@@ -197,6 +248,7 @@ namespace Test_Automation
         public ObservableCollection<NodeSetting> Settings { get; } = new ObservableCollection<NodeSetting>();
         public ObservableCollection<NodeSetting> Variables { get; } = new ObservableCollection<NodeSetting>();
         public ObservableCollection<VariableExtractionRule> Extractors { get; } = new ObservableCollection<VariableExtractionRule>();
+        public ObservableCollection<EnvironmentProfile> Environments { get; } = new ObservableCollection<EnvironmentProfile>();
 
         public string DisplayName => $"{Type}: {Name}";
 
@@ -453,6 +505,43 @@ namespace Test_Automation
         {
             get => GetSettingValue("Environment", "dev");
             set => SetSettingValue("Environment", value);
+        }
+
+        public ObservableCollection<EnvironmentProfile> ProjectEnvironments
+        {
+            get
+            {
+                var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
+                return projectNode?.Environments ?? new ObservableCollection<EnvironmentProfile>();
+            }
+        }
+
+        public ObservableCollection<string> EnvironmentNames { get; } = new ObservableCollection<string>();
+
+        private string? _activeEnvironmentName;
+        public string? ActiveEnvironmentName
+        {
+            get => _activeEnvironmentName;
+            set
+            {
+                if (_activeEnvironmentName == value) return;
+                _activeEnvironmentName = value;
+                OnPropertyChanged();
+                // Sync back to project node setting
+                var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
+                if (projectNode != null)
+                {
+                    var setting = projectNode.Settings.FirstOrDefault(s => s.Key == "ActiveEnvironment");
+                    if (setting == null)
+                    {
+                        projectNode.Settings.Add(new NodeSetting("ActiveEnvironment", value ?? string.Empty));
+                    }
+                    else
+                    {
+                        setting.Value = value ?? string.Empty;
+                    }
+                }
+            }
         }
 
         public string HttpMethod
@@ -771,6 +860,35 @@ namespace Test_Automation
             RefreshJsonPreview();
         }
 
+        private void RebuildEnvironmentNames()
+        {
+            var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
+            EnvironmentNames.Clear();
+            if (projectNode == null) return;
+
+            foreach (var env in projectNode.Environments)
+            {
+                EnvironmentNames.Add(env.Name);
+            }
+
+            // Restore saved active environment or pick the first one
+            var savedActive = projectNode.Settings.FirstOrDefault(s => s.Key == "ActiveEnvironment")?.Value;
+            if (!string.IsNullOrWhiteSpace(savedActive) && EnvironmentNames.Contains(savedActive))
+            {
+                _activeEnvironmentName = savedActive;
+            }
+            else if (EnvironmentNames.Count > 0)
+            {
+                _activeEnvironmentName = EnvironmentNames[0];
+            }
+            else
+            {
+                _activeEnvironmentName = null;
+            }
+            OnPropertyChanged(nameof(ActiveEnvironmentName));
+            OnPropertyChanged(nameof(ProjectEnvironments));
+        }
+
         private void AddProjectButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -786,6 +904,7 @@ namespace Test_Automation
                 SelectedNode = root;
                 RefreshJsonPreview();
                 UpdateProjectVariablesPreview();
+                RebuildEnvironmentNames();
             }
             catch (Exception ex)
             {
@@ -865,6 +984,7 @@ namespace Test_Automation
                 SelectedNode = root;
                 RefreshJsonPreview();
                 UpdateProjectVariablesPreview();
+                RebuildEnvironmentNames();
             }
             catch (Exception ex)
             {
@@ -1070,6 +1190,7 @@ namespace Test_Automation
                 return;
             }
 
+            // Inject project-level variables
             foreach (var variable in projectNode.Variables)
             {
                 if (string.IsNullOrWhiteSpace(variable.Key))
@@ -1078,6 +1199,28 @@ namespace Test_Automation
                 }
 
                 context.SetVariable(variable.Key, variable.Value);
+            }
+
+            // Inject active environment variables (baseUrl + env-specific vars)
+            var activeName = _activeEnvironmentName;
+            if (!string.IsNullOrWhiteSpace(activeName))
+            {
+                var activeEnv = projectNode.Environments
+                    .FirstOrDefault(env => string.Equals(env.Name, activeName, StringComparison.OrdinalIgnoreCase));
+
+                if (activeEnv != null)
+                {
+                    context.SetVariable("environment", activeEnv.Name);
+                    context.SetVariable("baseUrl", activeEnv.BaseUrl);
+
+                    foreach (var variable in activeEnv.Variables)
+                    {
+                        if (!string.IsNullOrWhiteSpace(variable.Key))
+                        {
+                            context.SetVariable(variable.Key, variable.Value);
+                        }
+                    }
+                }
             }
         }
 
@@ -1358,6 +1501,69 @@ namespace Test_Automation
 
             SelectedNode.Variables.Remove(setting);
             RefreshJsonPreview();
+        }
+
+        private void AddEnvironmentButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || SelectedNode.Type != "Project")
+            {
+                return;
+            }
+
+            var env = new EnvironmentProfile("new-env", "https://");
+            SelectedNode.Environments.Add(env);
+            RebuildEnvironmentNames();
+            RefreshJsonPreview();
+        }
+
+        private void DeleteEnvironmentButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || SelectedNode.Type != "Project")
+            {
+                return;
+            }
+
+            if (sender is not Button button || button.DataContext is not EnvironmentProfile env)
+            {
+                return;
+            }
+
+            SelectedNode.Environments.Remove(env);
+            RebuildEnvironmentNames();
+            RefreshJsonPreview();
+        }
+
+        private void AddEnvVariableButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.DataContext is not EnvironmentProfile env)
+            {
+                return;
+            }
+
+            env.Variables.Add(new NodeSetting("key", "value"));
+            RefreshJsonPreview();
+        }
+
+        private void RemoveEnvVariableButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.DataContext is not NodeSetting setting)
+            {
+                return;
+            }
+
+            // Walk up the visual tree to find the EnvironmentProfile owner
+            var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
+            if (projectNode == null) return;
+
+            foreach (var env in projectNode.Environments)
+            {
+                if (env.Variables.Contains(setting))
+                {
+                    env.Variables.Remove(setting);
+                    RefreshJsonPreview();
+                    return;
+                }
+            }
         }
 
         private void PlanTreeView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -1697,6 +1903,7 @@ namespace Test_Automation
             node.Settings.CollectionChanged += NodeSettings_CollectionChanged;
             node.Variables.CollectionChanged += NodeVariables_CollectionChanged;
             node.Extractors.CollectionChanged += NodeExtractors_CollectionChanged;
+            node.Environments.CollectionChanged += NodeEnvironments_CollectionChanged;
 
             foreach (var setting in node.Settings)
             {
@@ -1721,6 +1928,7 @@ namespace Test_Automation
             node.Settings.CollectionChanged -= NodeSettings_CollectionChanged;
             node.Variables.CollectionChanged -= NodeVariables_CollectionChanged;
             node.Extractors.CollectionChanged -= NodeExtractors_CollectionChanged;
+            node.Environments.CollectionChanged -= NodeEnvironments_CollectionChanged;
 
             foreach (var setting in node.Settings)
             {
@@ -1847,6 +2055,13 @@ namespace Test_Automation
                 }
             }
 
+            RefreshJsonPreview();
+        }
+
+        private void NodeEnvironments_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            RebuildEnvironmentNames();
+            OnPropertyChanged(nameof(ProjectEnvironments));
             RefreshJsonPreview();
         }
 
@@ -2617,6 +2832,17 @@ namespace Test_Automation
                 })
                 .ToList();
 
+            var environments = node.Environments
+                .Select(env => new
+                {
+                    name = env.Name,
+                    baseUrl = env.BaseUrl,
+                    variables = env.Variables
+                        .Where(v => !string.IsNullOrWhiteSpace(v.Key))
+                        .ToDictionary(v => v.Key, v => v.Value)
+                })
+                .ToList();
+
             return new
             {
                 type = node.Type,
@@ -2625,6 +2851,7 @@ namespace Test_Automation
                 settings,
                 variables,
                 extractors,
+                environments,
                 children = node.Children.Select(BuildNodeObject).ToList()
             };
         }
@@ -2650,6 +2877,16 @@ namespace Test_Automation
                         Source = extractor.Source,
                         JsonPath = extractor.JsonPath,
                         VariableName = extractor.VariableName
+                    })
+                    .ToList(),
+                Environments = node.Environments
+                    .Select(env => new EnvironmentFileModel
+                    {
+                        Name = env.Name,
+                        BaseUrl = env.BaseUrl,
+                        Variables = env.Variables
+                            .Where(v => !string.IsNullOrWhiteSpace(v.Key))
+                            .ToDictionary(v => v.Key, v => v.Value)
                     })
                     .ToList(),
                 Children = node.Children.Select(ToFileModel).ToList()
@@ -2683,6 +2920,23 @@ namespace Test_Automation
             foreach (var extractor in model.Extractors)
             {
                 node.Extractors.Add(new VariableExtractionRule(extractor.Source, extractor.JsonPath, extractor.VariableName));
+            }
+
+            node.Environments.Clear();
+            if (model.Environments != null)
+            {
+                foreach (var envModel in model.Environments)
+                {
+                    var envProfile = new EnvironmentProfile(envModel.Name, envModel.BaseUrl);
+                    if (envModel.Variables != null)
+                    {
+                        foreach (var v in envModel.Variables)
+                        {
+                            envProfile.Variables.Add(new NodeSetting(v.Key, v.Value));
+                        }
+                    }
+                    node.Environments.Add(envProfile);
+                }
             }
 
             foreach (var child in model.Children)
@@ -2744,6 +2998,7 @@ namespace Test_Automation
 
             OnPropertyChanged(nameof(ProjectDescription));
             OnPropertyChanged(nameof(ProjectEnvironment));
+            OnPropertyChanged(nameof(ProjectEnvironments));
             OnPropertyChanged(nameof(HttpMethod));
             OnPropertyChanged(nameof(HttpUrl));
             OnPropertyChanged(nameof(HttpBody));
