@@ -44,6 +44,9 @@ namespace Test_Automation.Models
 
         [JsonPropertyName("responseBody")]
         public string ResponseBody { get; set; } = string.Empty;
+
+        [JsonPropertyName("responseHeaders")]
+        public Dictionary<string, string> ResponseHeaders { get; set; } = new Dictionary<string, string>();
     }
 
     /// <summary>

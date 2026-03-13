@@ -903,6 +903,66 @@
                                      IsReadOnly="True" />
                         </Grid>
                     </TabItem>
+                    <TabItem Header="Req Headers"
+                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBox Text="{Binding HttpRequestHeadersPreview}"
+                               FontFamily="Consolas"
+                               FontSize="13"
+                               AcceptsReturn="True"
+                               VerticalScrollBarVisibility="Auto"
+                               HorizontalScrollBarVisibility="Auto"
+                               IsReadOnly="True" />
+                    </TabItem>
+                    <TabItem Header="Req Cookies"
+                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBox Text="{Binding HttpRequestCookiesPreview}"
+                               FontFamily="Consolas"
+                               FontSize="13"
+                               AcceptsReturn="True"
+                               VerticalScrollBarVisibility="Auto"
+                               HorizontalScrollBarVisibility="Auto"
+                               IsReadOnly="True" />
+                    </TabItem>
+                    <TabItem Header="Req Metadata"
+                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBox Text="{Binding HttpRequestMetadataPreview}"
+                               FontFamily="Consolas"
+                               FontSize="13"
+                               AcceptsReturn="True"
+                               VerticalScrollBarVisibility="Auto"
+                               HorizontalScrollBarVisibility="Auto"
+                               IsReadOnly="True" />
+                    </TabItem>
+                    <TabItem Header="Res Headers"
+                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBox Text="{Binding HttpResponseHeadersPreview}"
+                               FontFamily="Consolas"
+                               FontSize="13"
+                               AcceptsReturn="True"
+                               VerticalScrollBarVisibility="Auto"
+                               HorizontalScrollBarVisibility="Auto"
+                               IsReadOnly="True" />
+                    </TabItem>
+                    <TabItem Header="Res Cookies"
+                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBox Text="{Binding HttpResponseCookiesPreview}"
+                               FontFamily="Consolas"
+                               FontSize="13"
+                               AcceptsReturn="True"
+                               VerticalScrollBarVisibility="Auto"
+                               HorizontalScrollBarVisibility="Auto"
+                               IsReadOnly="True" />
+                    </TabItem>
+                    <TabItem Header="Res Metadata"
+                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBox Text="{Binding HttpResponseMetadataPreview}"
+                               FontFamily="Consolas"
+                               FontSize="13"
+                               AcceptsReturn="True"
+                               VerticalScrollBarVisibility="Auto"
+                               HorizontalScrollBarVisibility="Auto"
+                               IsReadOnly="True" />
+                    </TabItem>
                     <TabItem Header="Logs">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -922,7 +982,8 @@
                                      IsReadOnly="True" />
                         </Grid>
                     </TabItem>
-                    <TabItem Header="Flow JSON">
+                    <TabItem Header="Flow JSON"
+                             Visibility="{Binding IsProjectSelected, Converter={StaticResource BoolToVisibilityConverter}}">
                         <TextBox Text="{Binding JsonPreview}"
                                  FontFamily="Consolas"
                                  FontSize="13"

@@ -77,6 +77,16 @@ namespace Test_Automation.Componentes
 
                 using var response = await client.SendAsync(request);
                 data.ResponseStatus = (int)response.StatusCode;
+                foreach (var header in response.Headers)
+                {
+                    data.ResponseHeaders[header.Key] = string.Join(", ", header.Value);
+                }
+
+                foreach (var header in response.Content.Headers)
+                {
+                    data.ResponseHeaders[header.Key] = string.Join(", ", header.Value);
+                }
+
                 data.ResponseBody = await response.Content.ReadAsStringAsync();
             }
 

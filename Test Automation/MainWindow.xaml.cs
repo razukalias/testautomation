@@ -63,6 +63,12 @@ namespace Test_Automation
         private string _jsonPreview = "{}";
         private string _previewRequest = "Select a component to see request preview.";
         private string _previewResponse = "Select a component to see response preview.";
+        private string _httpRequestHeadersPreview = "Select an HTTP component to see request headers.";
+        private string _httpRequestCookiesPreview = "Select an HTTP component to see request cookies.";
+        private string _httpRequestMetadataPreview = "Select an HTTP component to see request metadata.";
+        private string _httpResponseHeadersPreview = "Select an HTTP component to see response headers.";
+        private string _httpResponseCookiesPreview = "Select an HTTP component to see response cookies.";
+        private string _httpResponseMetadataPreview = "Select an HTTP component to see response metadata.";
         private string _previewLogs = "Logs will appear here.";
         private string _variablesPreview = "{}";
         private Test_Automation.Models.ExecutionContext? _lastExecutionContext;
@@ -121,6 +127,72 @@ namespace Test_Automation
             {
                 if (_previewLogs == value) return;
                 _previewLogs = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string HttpRequestHeadersPreview
+        {
+            get => _httpRequestHeadersPreview;
+            set
+            {
+                if (_httpRequestHeadersPreview == value) return;
+                _httpRequestHeadersPreview = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string HttpRequestCookiesPreview
+        {
+            get => _httpRequestCookiesPreview;
+            set
+            {
+                if (_httpRequestCookiesPreview == value) return;
+                _httpRequestCookiesPreview = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string HttpRequestMetadataPreview
+        {
+            get => _httpRequestMetadataPreview;
+            set
+            {
+                if (_httpRequestMetadataPreview == value) return;
+                _httpRequestMetadataPreview = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string HttpResponseHeadersPreview
+        {
+            get => _httpResponseHeadersPreview;
+            set
+            {
+                if (_httpResponseHeadersPreview == value) return;
+                _httpResponseHeadersPreview = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string HttpResponseCookiesPreview
+        {
+            get => _httpResponseCookiesPreview;
+            set
+            {
+                if (_httpResponseCookiesPreview == value) return;
+                _httpResponseCookiesPreview = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string HttpResponseMetadataPreview
+        {
+            get => _httpResponseMetadataPreview;
+            set
+            {
+                if (_httpResponseMetadataPreview == value) return;
+                _httpResponseMetadataPreview = value;
                 OnPropertyChanged();
             }
         }
@@ -1920,6 +1992,7 @@ namespace Test_Automation
                 PreviewRequest = "Select a component to see request preview.";
                 PreviewResponse = "Select a component to see response preview.";
                 PreviewLogs = "Logs will appear here.";
+                ResetHttpDetailPreviews();
                 return;
             }
 
@@ -1927,6 +2000,11 @@ namespace Test_Automation
             var nodeId = SelectedNode.Id;
             var nodeName = SelectedNode.Name;
             var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+
+            if (!string.Equals(nodeType, "Http", StringComparison.OrdinalIgnoreCase))
+            {
+                ResetHttpDetailPreviews();
+            }
 
             if (nodeType == "Http")
             {
@@ -1965,6 +2043,32 @@ namespace Test_Automation
                     && latestHttpExecution.Data is not HttpData
                     && string.Equals(latestHttpExecution.Status, "failed", StringComparison.OrdinalIgnoreCase))
                 {
+                    HttpRequestHeadersPreview = "{}";
+                    HttpRequestCookiesPreview = "[]";
+                    HttpRequestMetadataPreview = JsonSerializer.Serialize(new
+                    {
+                        component = nodeName,
+                        method,
+                        url,
+                        status = latestHttpExecution.Status,
+                        durationMs = latestHttpExecution.DurationMs,
+                        threadIndex = latestHttpExecution.ThreadIndex,
+                        startTime = latestHttpExecution.StartTime,
+                        endTime = latestHttpExecution.EndTime,
+                        error = latestHttpExecution.Error
+                    }, new JsonSerializerOptions { WriteIndented = true });
+
+                    HttpResponseHeadersPreview = "{}";
+                    HttpResponseCookiesPreview = "[]";
+                    HttpResponseMetadataPreview = JsonSerializer.Serialize(new
+                    {
+                        status = latestHttpExecution.Status,
+                        error = latestHttpExecution.Error,
+                        message = "Request failed before receiving an HTTP response.",
+                        durationMs = latestHttpExecution.DurationMs,
+                        threadIndex = latestHttpExecution.ThreadIndex
+                    }, new JsonSerializerOptions { WriteIndented = true });
+
                     PreviewRequest = JsonSerializer.Serialize(new
                     {
                         component = nodeName,
@@ -1988,6 +2092,38 @@ namespace Test_Automation
                     AppendExtractionPreview(now);
                     return;
                 }
+
+                var latestHttpData = latestHttpExecution?.Data as HttpData;
+                var requestHeaders = latestHttpData?.Headers ?? BuildRequestHeadersFromSettings();
+                HttpRequestHeadersPreview = JsonSerializer.Serialize(requestHeaders, new JsonSerializerOptions { WriteIndented = true });
+                HttpRequestCookiesPreview = JsonSerializer.Serialize(ExtractCookiesFromHeaders(requestHeaders, "Cookie"), new JsonSerializerOptions { WriteIndented = true });
+                HttpRequestMetadataPreview = JsonSerializer.Serialize(new
+                {
+                    component = nodeName,
+                    method,
+                    url,
+                    authType = GetSettingValue("AuthType", "WindowsIntegrated"),
+                    bodyLength = (latestHttpData?.Body ?? HttpBody ?? string.Empty).Length,
+                    status = latestHttpExecution?.Status ?? "not-run",
+                    durationMs = latestHttpExecution?.DurationMs,
+                    threadIndex = latestHttpExecution?.ThreadIndex,
+                    startTime = latestHttpExecution?.StartTime,
+                    endTime = latestHttpExecution?.EndTime
+                }, new JsonSerializerOptions { WriteIndented = true });
+
+                var responseHeaders = latestHttpData?.ResponseHeaders ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                HttpResponseHeadersPreview = JsonSerializer.Serialize(responseHeaders, new JsonSerializerOptions { WriteIndented = true });
+                HttpResponseCookiesPreview = JsonSerializer.Serialize(ExtractCookiesFromHeaders(responseHeaders, "Set-Cookie"), new JsonSerializerOptions { WriteIndented = true });
+                HttpResponseMetadataPreview = JsonSerializer.Serialize(new
+                {
+                    status = latestHttpExecution?.Status ?? "not-run",
+                    httpStatus = latestHttpData?.ResponseStatus,
+                    contentType = TryGetHeaderValue(responseHeaders, "Content-Type"),
+                    bodyLength = (latestHttpData?.ResponseBody ?? string.Empty).Length,
+                    durationMs = latestHttpExecution?.DurationMs,
+                    threadIndex = latestHttpExecution?.ThreadIndex,
+                    error = latestHttpExecution?.Error
+                }, new JsonSerializerOptions { WriteIndented = true });
 
                 if (httpRequestRuns.Count > 0)
                 {
@@ -2527,6 +2663,60 @@ namespace Test_Automation
             }
 
             PreviewLogs = string.Join("\n", new[] { PreviewLogs }.Concat(lines));
+        }
+
+        private void ResetHttpDetailPreviews()
+        {
+            HttpRequestHeadersPreview = "Select an HTTP component to see request headers.";
+            HttpRequestCookiesPreview = "Select an HTTP component to see request cookies.";
+            HttpRequestMetadataPreview = "Select an HTTP component to see request metadata.";
+            HttpResponseHeadersPreview = "Select an HTTP component to see response headers.";
+            HttpResponseCookiesPreview = "Select an HTTP component to see response cookies.";
+            HttpResponseMetadataPreview = "Select an HTTP component to see response metadata.";
+        }
+
+        private Dictionary<string, string> BuildRequestHeadersFromSettings()
+        {
+            var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var rawHeaders = GetSettingValue("Headers", "{}");
+            if (!string.IsNullOrWhiteSpace(rawHeaders))
+            {
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(rawHeaders);
+                    if (parsed != null)
+                    {
+                        foreach (var item in parsed)
+                        {
+                            headers[item.Key] = item.Value;
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return headers;
+        }
+
+        private static List<string> ExtractCookiesFromHeaders(Dictionary<string, string> headers, string cookieHeaderName)
+        {
+            if (!headers.TryGetValue(cookieHeaderName, out var cookieHeader) || string.IsNullOrWhiteSpace(cookieHeader))
+            {
+                return new List<string>();
+            }
+
+            return cookieHeader
+                .Split(';', StringSplitOptions.RemoveEmptyEntries)
+                .Select(cookie => cookie.Trim())
+                .Where(cookie => !string.IsNullOrWhiteSpace(cookie))
+                .ToList();
+        }
+
+        private static string? TryGetHeaderValue(Dictionary<string, string> headers, string headerName)
+        {
+            return headers.TryGetValue(headerName, out var value) ? value : null;
         }
 
         private void ClearRequestButton_Click(object sender, RoutedEventArgs e)
@@ -3217,6 +3407,12 @@ namespace Test_Automation
             OnPropertyChanged(nameof(HttpMethod));
             OnPropertyChanged(nameof(HttpUrl));
             OnPropertyChanged(nameof(HttpUrlResolved));
+            OnPropertyChanged(nameof(HttpRequestHeadersPreview));
+            OnPropertyChanged(nameof(HttpRequestCookiesPreview));
+            OnPropertyChanged(nameof(HttpRequestMetadataPreview));
+            OnPropertyChanged(nameof(HttpResponseHeadersPreview));
+            OnPropertyChanged(nameof(HttpResponseCookiesPreview));
+            OnPropertyChanged(nameof(HttpResponseMetadataPreview));
             OnPropertyChanged(nameof(HttpBody));
             OnPropertyChanged(nameof(HttpHeaders));
             OnPropertyChanged(nameof(HttpAuthType));
