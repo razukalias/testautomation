@@ -56,7 +56,7 @@ namespace Test_Automation.Services
                 TraceLog($"Execute() completed for {component.Name}. Data type: {componentData?.GetType().Name ?? "<null>"}.");
                 result.Data = componentData;
                 ApplyVariableExtractors(component, context, componentData, TraceLog);
-                var assertionResults = EvaluateAssertions(component, componentData, TraceLog);
+                var assertionResults = EvaluateAssertions(component, componentData, context, TraceLog);
                 result.AssertionResults = assertionResults;
                 result.AssertFailedCount = assertionResults.Count(item => !item.Passed && IsAssertMode(item.Mode));
                 result.ExpectFailedCount = assertionResults.Count(item => !item.Passed && !IsAssertMode(item.Mode));
@@ -160,6 +160,12 @@ namespace Test_Automation.Services
                 return BuildPreviewResponse(componentData);
             }
 
+            if (string.Equals(source, "PreviewRequest", StringComparison.OrdinalIgnoreCase))
+            {
+                trace?.Invoke("ResolveSourceValue using PreviewRequest payload.");
+                return BuildPreviewRequest(componentData);
+            }
+
             if (component.Settings != null && component.Settings.TryGetValue(source, out var settingValue))
             {
                 trace?.Invoke($"ResolveSourceValue matched setting '{source}'.");
@@ -194,7 +200,7 @@ namespace Test_Automation.Services
             return null;
         }
 
-        private static List<AssertionEvaluationResult> EvaluateAssertions(Component component, ComponentData? componentData, Action<string>? trace)
+        private static List<AssertionEvaluationResult> EvaluateAssertions(Component component, ComponentData? componentData, Test_Automation.Models.ExecutionContext context, Action<string>? trace)
         {
             var evaluations = new List<AssertionEvaluationResult>();
             if (component.Assertions == null || component.Assertions.Count == 0)
@@ -257,7 +263,12 @@ namespace Test_Automation.Services
 
                 evaluation.Actual = actual;
 
-                evaluation.Passed = EvaluateCondition(actual, assertion.Expected, assertion.Condition);
+                if (string.Equals(assertion.Condition, "Script", StringComparison.OrdinalIgnoreCase))
+                {
+                    trace?.Invoke($"Assertion[{index}] Script expression: {assertion.Expected}");
+                }
+
+                evaluation.Passed = EvaluateCondition(actual, assertion.Expected, assertion.Condition, context, trace);
                 if (evaluation.Passed)
                 {
                     evaluation.Message = $"{mode} passed.";
@@ -285,7 +296,7 @@ namespace Test_Automation.Services
             return !string.Equals(mode, "Expect", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static bool EvaluateCondition(string actual, string expected, string condition)
+        private static bool EvaluateCondition(string actual, string expected, string condition, Test_Automation.Models.ExecutionContext? context = null, Action<string>? trace = null)
         {
             var op = string.IsNullOrWhiteSpace(condition) ? "Equals" : condition;
             var normalizedActual = NormalizeComparisonValue(actual);
@@ -318,6 +329,8 @@ namespace Test_Automation.Services
                     {
                         return false;
                     }
+                case "Script":
+                    return EvaluateScriptAssertion(normalizedActual, normalizedExpected, context, trace);
                 case "GreaterThan":
                     return CompareNumbers(normalizedActual, normalizedExpected, (a, b) => a > b);
                 case "GreaterOrEqual":
@@ -329,6 +342,63 @@ namespace Test_Automation.Services
                 default:
                     return string.Equals(normalizedActual, normalizedExpected, StringComparison.OrdinalIgnoreCase);
             }
+        }
+
+        private static bool EvaluateScriptAssertion(string actual, string script, Test_Automation.Models.ExecutionContext? context, Action<string>? trace)
+        {
+            if (string.IsNullOrWhiteSpace(script))
+            {
+                trace?.Invoke("Script assertion failed: script is empty.");
+                return false;
+            }
+
+            var runtimeContext = context ?? new Test_Automation.Models.ExecutionContext();
+            runtimeContext.SetVariable("actual", actual);
+
+            if (TryParseNumber(actual, out var actualNumber))
+            {
+                runtimeContext.SetVariable("actualNumber", actualNumber.ToString(CultureInfo.InvariantCulture));
+            }
+
+            var language = "CSharp";
+            var code = script;
+            if (script.Contains("\n") && script.Contains("//lang", StringComparison.OrdinalIgnoreCase))
+            {
+                var lines = script.Split('\n');
+                var marker = lines.FirstOrDefault(line => line.TrimStart().StartsWith("//lang", StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(marker))
+                {
+                    var parts = marker.Split(':', 2, StringSplitOptions.TrimEntries);
+                    if (parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[1]))
+                    {
+                        language = parts[1];
+                    }
+                }
+            }
+
+            trace?.Invoke($"Script assertion engine start: language={language}");
+            var outcome = ScriptEngine.ExecuteAsync(language, code, runtimeContext, actual).GetAwaiter().GetResult();
+            if (!outcome.Success)
+            {
+                trace?.Invoke($"Script assertion execution error: {outcome.Error}");
+                return false;
+            }
+
+            if (outcome.Result is bool boolResult)
+            {
+                trace?.Invoke($"Script assertion result bool={boolResult}");
+                return boolResult;
+            }
+
+            var text = outcome.Result?.ToString() ?? string.Empty;
+            if (bool.TryParse(text, out var parsed))
+            {
+                trace?.Invoke($"Script assertion result parsed bool={parsed}");
+                return parsed;
+            }
+
+            trace?.Invoke($"Script assertion returned non-boolean result: '{text}'");
+            return false;
         }
 
         private static string NormalizeComparisonValue(string? value)
@@ -416,6 +486,96 @@ namespace Test_Automation.Services
                 {
                     rows = sqlData.QueryResult,
                     affectedRows = rowsAffected
+                });
+            }
+
+            return JsonSerializer.Serialize(componentData);
+        }
+
+        private static string? BuildPreviewRequest(ComponentData? componentData)
+        {
+            if (componentData == null)
+            {
+                return null;
+            }
+
+            if (componentData is HttpData httpData)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    method = httpData.Method,
+                    url = httpData.Url,
+                    headers = httpData.Headers,
+                    body = TryParseJson(httpData.Body),
+                    runs = new[]
+                    {
+                        new
+                        {
+                            threadIndex = CurrentThreadIndex.Value ?? 0,
+                            method = httpData.Method,
+                            url = httpData.Url,
+                            headers = httpData.Headers,
+                            body = TryParseJson(httpData.Body)
+                        }
+                    }
+                });
+            }
+
+            if (componentData is GraphQlData graphQlData)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    endpoint = graphQlData.Endpoint,
+                    query = graphQlData.Query,
+                    variables = TryParseJson(graphQlData.Variables),
+                    headers = graphQlData.Headers,
+                    runs = new[]
+                    {
+                        new
+                        {
+                            threadIndex = CurrentThreadIndex.Value ?? 0,
+                            endpoint = graphQlData.Endpoint,
+                            query = graphQlData.Query,
+                            variables = TryParseJson(graphQlData.Variables),
+                            headers = graphQlData.Headers
+                        }
+                    }
+                });
+            }
+
+            if (componentData is SqlData sqlData)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    connection = sqlData.ConnectionString,
+                    query = sqlData.Query,
+                    runs = new[]
+                    {
+                        new
+                        {
+                            threadIndex = CurrentThreadIndex.Value ?? 0,
+                            connection = sqlData.ConnectionString,
+                            query = sqlData.Query
+                        }
+                    }
+                });
+            }
+
+            if (componentData is ScriptData scriptData)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    language = scriptData.ScriptLanguage,
+                    code = scriptData.ScriptCode,
+                    runs = new[]
+                    {
+                        new
+                        {
+                            threadIndex = CurrentThreadIndex.Value ?? 0,
+                            language = scriptData.ScriptLanguage,
+                            code = scriptData.ScriptCode
+                        }
+                    }
                 });
             }
 

@@ -53,7 +53,8 @@ namespace Test_Automation
             "LessOrEqual",
             "IsEmpty",
             "IsNotEmpty",
-            "Regex"
+            "Regex",
+            "Script"
         };
 
         public ObservableCollection<string> AssertionModeOptions { get; } = new ObservableCollection<string>

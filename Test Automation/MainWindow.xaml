@@ -926,7 +926,24 @@
                                                           Margin="0,0,6,0"
                                                           ItemsSource="{Binding DataContext.AssertionConditionOptions, RelativeSource={RelativeSource AncestorType=Window}}"
                                                           SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" />
-                                                <TextBox Grid.Column="5" Margin="0,0,6,0" Text="{Binding Expected, UpdateSourceTrigger=PropertyChanged}" />
+                                                <TextBox Grid.Column="5" Margin="0,0,6,0" Text="{Binding Expected, UpdateSourceTrigger=PropertyChanged}">
+                                                    <TextBox.Style>
+                                                        <Style TargetType="TextBox">
+                                                            <Setter Property="AcceptsReturn" Value="False" />
+                                                            <Setter Property="TextWrapping" Value="NoWrap" />
+                                                            <Setter Property="MinHeight" Value="24" />
+                                                            <Setter Property="VerticalScrollBarVisibility" Value="Disabled" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Condition}" Value="Script">
+                                                                    <Setter Property="AcceptsReturn" Value="True" />
+                                                                    <Setter Property="TextWrapping" Value="Wrap" />
+                                                                    <Setter Property="MinHeight" Value="90" />
+                                                                    <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBox.Style>
+                                                </TextBox>
                                                 <Border Grid.Column="6" Margin="0,0,6,0" CornerRadius="3" Padding="6,2" BorderBrush="#D1D5DB" BorderThickness="1">
                                                     <TextBlock Text="{Binding StatusLabel}" ToolTip="{Binding StatusMessage}" HorizontalAlignment="Center">
                                                         <TextBlock.Style>
