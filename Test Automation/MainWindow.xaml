@@ -809,9 +809,9 @@
                         </StackPanel>
                     </Border>
 
-                    <TextBlock Text="Settings" FontWeight="SemiBold" Margin="0,8,0,8" />
+                    <TextBlock Text="Settings" FontWeight="SemiBold" Margin="0,8,0,8" Visibility="Collapsed" />
 
-                    <ScrollViewer Height="140" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Height="140" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                         <ItemsControl ItemsSource="{Binding SelectedNode.Settings}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -847,7 +847,7 @@
                         </ItemsControl>
                     </ScrollViewer>
 
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
                         <Button Content="Add Setting" Width="100" Click="AddSettingButton_Click" />
                     </StackPanel>
                     </StackPanel>
