@@ -73,7 +73,7 @@ namespace Test_Automation.Services
 
     public sealed class ScriptGlobals
     {
-        public Dictionary<string, object> Vars { get; }
+        public IReadOnlyDictionary<string, object> Vars { get; }
         public string Actual { get; }
         public double? ActualNumber { get; }
         public string actual => Actual;
@@ -81,7 +81,8 @@ namespace Test_Automation.Services
 
         public ScriptGlobals(Test_Automation.Models.ExecutionContext context, string? actual)
         {
-            Vars = context?.Variables ?? new Dictionary<string, object>();
+            Vars = context?.Variables as IReadOnlyDictionary<string, object>
+                ?? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             Actual = actual ?? string.Empty;
             ActualNumber = double.TryParse(Actual, out var numeric) ? numeric : null;
         }

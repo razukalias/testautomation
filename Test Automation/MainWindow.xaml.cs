@@ -3807,7 +3807,15 @@ namespace Test_Automation
                 return false;
             }
 
-            return key.Contains("Variable", StringComparison.OrdinalIgnoreCase);
+            var normalized = key.Trim();
+            if (string.Equals(normalized, "Variables", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return normalized.EndsWith("Variable", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(normalized, "VariableName", StringComparison.OrdinalIgnoreCase)
+                || normalized.EndsWith("VariableName", StringComparison.OrdinalIgnoreCase);
         }
 
         private void NotifySelectedNodeEditorProperties()

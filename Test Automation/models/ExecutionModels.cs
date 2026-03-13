@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Text.Json.Serialization;
 
 namespace Test_Automation.Models
@@ -9,11 +10,19 @@ namespace Test_Automation.Models
     /// </summary>
     public class ExecutionContext
     {
+        private ConcurrentDictionary<string, object> _variables = new ConcurrentDictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
         [JsonPropertyName("executionId")]
         public string ExecutionId { get; set; } = Guid.NewGuid().ToString();
 
         [JsonPropertyName("variables")]
-        public Dictionary<string, object> Variables { get; set; } = new Dictionary<string, object>();
+        public ConcurrentDictionary<string, object> Variables
+        {
+            get => _variables;
+            set => _variables = value != null
+                ? new ConcurrentDictionary<string, object>(value, StringComparer.OrdinalIgnoreCase)
+                : new ConcurrentDictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        }
 
         [JsonPropertyName("startTime")]
         public DateTime StartTime { get; set; } = DateTime.UtcNow;
@@ -32,17 +41,27 @@ namespace Test_Automation.Models
 
         public void SetVariable(string key, object value)
         {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return;
+            }
+
             Variables[key] = value;
         }
 
         public object? GetVariable(string key)
         {
-            return Variables.ContainsKey(key) ? Variables[key] : null;
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return null;
+            }
+
+            return Variables.TryGetValue(key, out var value) ? value : null;
         }
 
         public bool HasVariable(string key)
         {
-            return Variables.ContainsKey(key);
+            return !string.IsNullOrWhiteSpace(key) && Variables.ContainsKey(key);
         }
     }
 
