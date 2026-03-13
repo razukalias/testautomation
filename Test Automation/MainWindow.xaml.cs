@@ -83,6 +83,12 @@ namespace Test_Automation
             "OPTIONS"
         };
 
+        public ObservableCollection<string> ProjectRunModeOptions { get; } = new ObservableCollection<string>
+        {
+            "Sequence",
+            "Parallel"
+        };
+
         private PlanNode? _selectedNode;
         private string _selectedEnvironment = string.Empty;
         private string _selectedTraceLevel = "Verbose";
@@ -106,7 +112,9 @@ namespace Test_Automation
         private string _runtimeTraceLogBuffer = string.Empty;
         private Test_Automation.Models.ExecutionContext? _lastExecutionContext;
         private Test_Automation.Models.ExecutionContext? _activeExecutionContext;
+        private readonly List<Test_Automation.Models.ExecutionContext> _activeProjectExecutionContexts = new();
         private bool _isRunInProgress;
+        private string _selectedProjectRunMode = "Sequence";
 
         public PlanNode? SelectedNode
         {
@@ -329,6 +337,22 @@ namespace Test_Automation
                 }
 
                 _selectedTraceLevel = normalized;
+                OnPropertyChanged();
+            }
+        }
+
+        public string SelectedProjectRunMode
+        {
+            get => _selectedProjectRunMode;
+            set
+            {
+                var normalized = ProjectRunModeOptions.Contains(value) ? value : "Sequence";
+                if (string.Equals(_selectedProjectRunMode, normalized, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _selectedProjectRunMode = normalized;
                 OnPropertyChanged();
             }
         }
@@ -656,13 +680,30 @@ namespace Test_Automation
 
         private void StopRunButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!_isRunInProgress || _activeExecutionContext == null)
+            if (!_isRunInProgress)
             {
                 return;
             }
 
-            _activeExecutionContext.Status = "stopping";
-            _activeExecutionContext.RequestStop();
+            var requested = false;
+            if (_activeExecutionContext != null)
+            {
+                _activeExecutionContext.Status = "stopping";
+                _activeExecutionContext.RequestStop();
+                requested = true;
+            }
+
+            foreach (var context in _activeProjectExecutionContexts)
+            {
+                context.Status = "stopping";
+                context.RequestStop();
+                requested = true;
+            }
+
+            if (!requested)
+            {
+                return;
+            }
 
             var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
             PreviewLogs = string.Join("\n", new[]
@@ -672,14 +713,35 @@ namespace Test_Automation
             });
         }
 
-        private void SetRunState(bool isRunning, Test_Automation.Models.ExecutionContext? context = null)
+        private void SetRunState(
+            bool isRunning,
+            Test_Automation.Models.ExecutionContext? context = null,
+            IEnumerable<Test_Automation.Models.ExecutionContext>? contexts = null)
         {
             _isRunInProgress = isRunning;
             _activeExecutionContext = isRunning ? context : null;
+            _activeProjectExecutionContexts.Clear();
+            if (isRunning && contexts != null)
+            {
+                foreach (var runContext in contexts)
+                {
+                    _activeProjectExecutionContexts.Add(runContext);
+                }
+            }
 
             if (RunTestPlanButton != null)
             {
                 RunTestPlanButton.IsEnabled = !isRunning;
+            }
+
+            if (RunProjectTestPlansButton != null)
+            {
+                RunProjectTestPlansButton.IsEnabled = !isRunning;
+            }
+
+            if (ProjectRunModeComboBox != null)
+            {
+                ProjectRunModeComboBox.IsEnabled = !isRunning;
             }
 
             if (StopRunButton != null)
@@ -931,6 +993,186 @@ namespace Test_Automation
             {
                 SetRunState(false);
             }
+        }
+
+        private async void RunProjectTestPlansButton_Click(object sender, RoutedEventArgs e)
+        {
+            var testPlanNodes = GetRunnableProjectTestPlans();
+            if (testPlanNodes.Count == 0)
+            {
+                MessageBox.Show("Add at least one enabled TestPlan under the Project.", "Run Project", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var runnablePlans = testPlanNodes
+                .Select(node => (Node: node, Component: BuildComponentTree(node) as Test_Automation.Componentes.TestPlan))
+                .Where(entry => entry.Component != null)
+                .Select(entry => (Node: entry.Node, Component: entry.Component!))
+                .ToList();
+
+            if (runnablePlans.Count == 0)
+            {
+                MessageBox.Show("Unable to build enabled TestPlan components.", "Run Project", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            foreach (var plan in runnablePlans)
+            {
+                ResetAssertionStateForSubtree(plan.Node);
+            }
+
+            var contexts = runnablePlans.Select(_ => new Test_Automation.Models.ExecutionContext()).ToList();
+            for (var i = 0; i < contexts.Count; i++)
+            {
+                var context = contexts[i];
+                context.ResetStopRequest();
+                context.Status = "running";
+                ApplyProjectVariables(context);
+            }
+
+            var mode = string.Equals(SelectedProjectRunMode, "Parallel", StringComparison.OrdinalIgnoreCase)
+                ? "Parallel"
+                : "Sequence";
+            var startTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            _runtimeTraceLogBuffer = string.Empty;
+            PreviewLogs = $"[{startTimestamp}] Running {runnablePlans.Count} TestPlan(s) in {mode} mode.";
+            VariablesPreview = "{}";
+
+            try
+            {
+                SetRunState(true, null, contexts);
+
+                var plansWithContext = runnablePlans
+                    .Select((plan, index) => (plan.Node, plan.Component, Context: contexts[index]))
+                    .ToList();
+
+                var summaries = string.Equals(mode, "Parallel", StringComparison.OrdinalIgnoreCase)
+                    ? await RunProjectPlansParallelAsync(plansWithContext)
+                    : await RunProjectPlansSequentialAsync(plansWithContext);
+
+                var totalComponents = summaries.Sum(entry => entry.Summary.TotalComponents);
+                var passedComponents = summaries.Sum(entry => entry.Summary.PassedComponents);
+                var failedComponents = summaries.Sum(entry => entry.Summary.FailedComponents);
+                var anyStopped = plansWithContext.Any(entry => string.Equals(entry.Context.Status, "stopped", StringComparison.OrdinalIgnoreCase));
+                var status = anyStopped
+                    ? "stopped"
+                    : (failedComponents > 0 ? "failed" : "passed");
+                var executedPlans = summaries.Count();
+
+                var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                PreviewLogs = string.Join("\n", new[]
+                {
+                    PreviewLogs,
+                    $"[{endTimestamp}] Status: {status}",
+                    $"[{endTimestamp}] Total Components: {totalComponents}, Passed: {passedComponents}, Failed: {failedComponents}",
+                    $"[{endTimestamp}] TestPlans Run: {executedPlans}"
+                }.Concat(summaries.Select(entry =>
+                    $"[{endTimestamp}] - {entry.Node.Name}: {entry.Summary.Status} (Total: {entry.Summary.TotalComponents}, Passed: {entry.Summary.PassedComponents}, Failed: {entry.Summary.FailedComponents})")));
+
+                var mergedVariables = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                foreach (var context in contexts)
+                {
+                    foreach (var variable in context.Variables)
+                    {
+                        mergedVariables[variable.Key] = variable.Value;
+                    }
+                }
+
+                _lastExecutionContext = contexts.LastOrDefault();
+                VariablesPreview = JsonSerializer.Serialize(mergedVariables, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+
+                RefreshComponentPreview();
+                AppendRuntimeTraceBufferToPreviewLogs();
+            }
+            catch (OperationCanceledException)
+            {
+                var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                PreviewLogs = string.Join("\n", new[]
+                {
+                    PreviewLogs,
+                    $"[{endTimestamp}] Run stopped by user."
+                });
+                AppendRuntimeTraceBufferToPreviewLogs();
+            }
+            catch (Exception ex)
+            {
+                var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                PreviewLogs = string.Join("\n", new[]
+                {
+                    PreviewLogs,
+                    $"[{endTimestamp}] Run failed: {ex.Message}"
+                });
+                AppendRuntimeTraceBufferToPreviewLogs();
+                VariablesPreview = "{}";
+            }
+            finally
+            {
+                SetRunState(false);
+            }
+        }
+
+        private List<PlanNode> GetRunnableProjectTestPlans()
+        {
+            var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
+            if (projectNode == null)
+            {
+                return new List<PlanNode>();
+            }
+
+            return projectNode.Children
+                .Where(node => string.Equals(node.Type, "TestPlan", StringComparison.OrdinalIgnoreCase) && node.IsEnabled)
+                .ToList();
+        }
+
+        private async Task<List<(PlanNode Node, ExecutionSummary Summary)>> RunProjectPlansSequentialAsync(
+            IReadOnlyList<(PlanNode Node, Test_Automation.Componentes.TestPlan Component, Test_Automation.Models.ExecutionContext Context)> plans)
+        {
+            var summaries = new List<(PlanNode Node, ExecutionSummary Summary)>();
+            for (var index = 0; index < plans.Count; index++)
+            {
+                var plan = plans[index];
+                if (plan.Context.StopToken.IsCancellationRequested)
+                {
+                    throw new OperationCanceledException(plan.Context.StopToken);
+                }
+
+                var runner = new TestPlanRunner(CreateExecutorWithHighlight());
+                var summary = await runner.RunTestPlanWithContext(plan.Component, plan.Context);
+                summaries.Add((plan.Node, summary));
+
+                if (string.Equals(plan.Context.Status, "stopped", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(plan.Context.Status, "stopping", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new OperationCanceledException(plan.Context.StopToken);
+                }
+            }
+
+            return summaries;
+        }
+
+        private async Task<List<(PlanNode Node, ExecutionSummary Summary)>> RunProjectPlansParallelAsync(
+            IReadOnlyList<(PlanNode Node, Test_Automation.Componentes.TestPlan Component, Test_Automation.Models.ExecutionContext Context)> plans)
+        {
+            var tasks = plans.Select(async plan =>
+            {
+                var runner = new TestPlanRunner(CreateExecutorWithHighlight());
+                var summary = await runner.RunTestPlanWithContext(plan.Component, plan.Context);
+                return (plan.Node, Summary: summary, plan.Context);
+            });
+
+            var results = await Task.WhenAll(tasks);
+            if (results.Any(result => string.Equals(result.Context.Status, "stopped", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(result.Context.Status, "stopping", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new OperationCanceledException();
+            }
+
+            return results
+                .Select(result => (result.Node, result.Summary))
+                .ToList();
         }
 
         private void PlanTreeView_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)

@@ -207,7 +207,18 @@
                     <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
                             Visibility="{Binding IsProjectSelected, Converter={StaticResource BoolToVisibilityConverter}}">
                         <StackPanel>
-                            <TextBlock Text="Project" FontWeight="SemiBold" Margin="0,0,0,6" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="Project" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <ComboBox x:Name="ProjectRunModeComboBox"
+                                          Width="110"
+                                          Margin="10,0,6,0"
+                                          ItemsSource="{Binding ProjectRunModeOptions}"
+                                          SelectedItem="{Binding SelectedProjectRunMode, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button x:Name="RunProjectTestPlansButton"
+                                        Width="130"
+                                        Content="Run TestPlans"
+                                        Click="RunProjectTestPlansButton_Click" />
+                            </StackPanel>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="100" />
