@@ -9,407 +9,16 @@ using System.Text.Json;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using Test_Automation.Factories;
 using Test_Automation.Models;
+using Test_Automation.Models.Editor;
+using Test_Automation.Models.ProjectFiles;
 using Test_Automation.Services;
 
 namespace Test_Automation
 {
-    public class VariableUsageLabelConverter : IMultiValueConverter
-    {
-        public object Convert(object[] values, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        {
-            var variableName = values.Length > 0 ? values[0]?.ToString() ?? string.Empty : string.Empty;
-            if (Application.Current?.MainWindow is not MainWindow window)
-            {
-                return string.Empty;
-            }
-
-            return window.GetVariableUniquenessLabel(variableName);
-        }
-
-        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, System.Globalization.CultureInfo culture)
-        {
-            throw new NotSupportedException();
-        }
-    }
-
-    public class VariableUsageTooltipConverter : IMultiValueConverter
-    {
-        public object Convert(object[] values, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        {
-            var variableName = values.Length > 0 ? values[0]?.ToString() ?? string.Empty : string.Empty;
-            if (Application.Current?.MainWindow is not MainWindow window)
-            {
-                return string.Empty;
-            }
-
-            return window.GetVariableUsageTooltip(variableName);
-        }
-
-        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, System.Globalization.CultureInfo culture)
-        {
-            throw new NotSupportedException();
-        }
-    }
-
-    public class VariableSettingUsageLabelConverter : IMultiValueConverter
-    {
-        public object Convert(object[] values, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        {
-            var key = values.Length > 0 ? values[0]?.ToString() ?? string.Empty : string.Empty;
-            var value = values.Length > 1 ? values[1]?.ToString() ?? string.Empty : string.Empty;
-            if (!MainWindow.IsVariableSettingKey(key))
-            {
-                return string.Empty;
-            }
-
-            if (Application.Current?.MainWindow is not MainWindow window)
-            {
-                return string.Empty;
-            }
-
-            return window.GetVariableUniquenessLabel(value);
-        }
-
-        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, System.Globalization.CultureInfo culture)
-        {
-            throw new NotSupportedException();
-        }
-    }
-
-    public class VariableSettingUsageTooltipConverter : IMultiValueConverter
-    {
-        public object Convert(object[] values, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        {
-            var key = values.Length > 0 ? values[0]?.ToString() ?? string.Empty : string.Empty;
-            var value = values.Length > 1 ? values[1]?.ToString() ?? string.Empty : string.Empty;
-            if (!MainWindow.IsVariableSettingKey(key))
-            {
-                return string.Empty;
-            }
-
-            if (Application.Current?.MainWindow is not MainWindow window)
-            {
-                return string.Empty;
-            }
-
-            return window.GetVariableUsageTooltip(value);
-        }
-
-        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, System.Globalization.CultureInfo culture)
-        {
-            throw new NotSupportedException();
-        }
-    }
-
-    public class ProjectFileModel
-    {
-        public int Version { get; set; } = 1;
-        public NodeFileModel? Project { get; set; }
-    }
-
-    public class NodeFileModel
-    {
-        public string Id { get; set; } = string.Empty;
-        public string Type { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public bool Enabled { get; set; }
-        public Dictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
-        public Dictionary<string, string> Variables { get; set; } = new Dictionary<string, string>();
-        public List<VariableExtractionFileModel> Extractors { get; set; } = new List<VariableExtractionFileModel>();
-        public List<NodeFileModel> Children { get; set; } = new List<NodeFileModel>();
-    }
-
-    public class VariableExtractionFileModel
-    {
-        public string Source { get; set; } = string.Empty;
-        public string JsonPath { get; set; } = string.Empty;
-        public string VariableName { get; set; } = string.Empty;
-    }
-
-    public class NodeSetting : INotifyPropertyChanged
-    {
-        private string _key;
-        private string _value;
-
-        public string Key
-        {
-            get => _key;
-            set
-            {
-                if (_key == value) return;
-                _key = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public string Value
-        {
-            get => _value;
-            set
-            {
-                if (_value == value) return;
-                _value = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public NodeSetting(string key, string value)
-        {
-            _key = key;
-            _value = value;
-        }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-    }
-
-    public class VariableExtractionRule : INotifyPropertyChanged
-    {
-        private string _source;
-        private string _jsonPath;
-        private string _variableName;
-
-        public string Source
-        {
-            get => _source;
-            set
-            {
-                if (_source == value) return;
-                _source = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public string JsonPath
-        {
-            get => _jsonPath;
-            set
-            {
-                if (_jsonPath == value) return;
-                _jsonPath = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public string VariableName
-        {
-            get => _variableName;
-            set
-            {
-                if (_variableName == value) return;
-                _variableName = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public VariableExtractionRule(string source, string jsonPath, string variableName)
-        {
-            _source = source;
-            _jsonPath = jsonPath;
-            _variableName = variableName;
-        }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-    }
-
-    public class PlanNode : INotifyPropertyChanged
-    {
-        public string Id { get; }
-        public string Type { get; }
-
-        private string _name;
-        private bool _isEnabled;
-        private bool _isExpanded;
-        private bool _isHighlighted;
-
-        public string Name
-        {
-            get => _name;
-            set
-            {
-                if (_name == value) return;
-                _name = value;
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(DisplayName));
-            }
-        }
-
-        public bool IsEnabled
-        {
-            get => _isEnabled;
-            set
-            {
-                if (_isEnabled == value) return;
-                _isEnabled = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public bool IsExpanded
-        {
-            get => _isExpanded;
-            set
-            {
-                if (_isExpanded == value) return;
-                _isExpanded = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public bool IsHighlighted
-        {
-            get => _isHighlighted;
-            set
-            {
-                if (_isHighlighted == value) return;
-                _isHighlighted = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public PlanNode? Parent { get; set; }
-        public ObservableCollection<PlanNode> Children { get; } = new ObservableCollection<PlanNode>();
-        public ObservableCollection<NodeSetting> Settings { get; } = new ObservableCollection<NodeSetting>();
-        public ObservableCollection<NodeSetting> Variables { get; } = new ObservableCollection<NodeSetting>();
-        public ObservableCollection<VariableExtractionRule> Extractors { get; } = new ObservableCollection<VariableExtractionRule>();
-
-        public string DisplayName => $"{Type}: {Name}";
-
-        public PlanNode(string type, string name, string? id = null)
-        {
-            Id = string.IsNullOrWhiteSpace(id) ? Guid.NewGuid().ToString() : id;
-            Type = type;
-            _name = name;
-            _isEnabled = true;
-            _isExpanded = true;
-            _isHighlighted = false;
-            ApplyDefaultSettings(type);
-        }
-
-        private void ApplyDefaultSettings(string type)
-        {
-            if (type == "Project")
-            {
-                Settings.Add(new NodeSetting("Description", string.Empty));
-                Settings.Add(new NodeSetting("Environment", "dev"));
-            }
-            else if (type == "Http")
-            {
-                Settings.Add(new NodeSetting("Method", "GET"));
-                Settings.Add(new NodeSetting("Url", "https://api.example.com"));
-                Settings.Add(new NodeSetting("Body", ""));
-                Settings.Add(new NodeSetting("Headers", "{}"));
-                Settings.Add(new NodeSetting("AuthType", "WindowsIntegrated"));
-                Settings.Add(new NodeSetting("AuthUsername", ""));
-                Settings.Add(new NodeSetting("AuthPassword", ""));
-                Settings.Add(new NodeSetting("AuthToken", ""));
-                Settings.Add(new NodeSetting("ApiKeyName", ""));
-                Settings.Add(new NodeSetting("ApiKeyValue", ""));
-                Settings.Add(new NodeSetting("ApiKeyLocation", "Header"));
-                Settings.Add(new NodeSetting("OAuthTokenUrl", ""));
-                Settings.Add(new NodeSetting("OAuthClientId", ""));
-                Settings.Add(new NodeSetting("OAuthClientSecret", ""));
-                Settings.Add(new NodeSetting("OAuthScope", ""));
-            }
-            else if (type == "GraphQl")
-            {
-                Settings.Add(new NodeSetting("Endpoint", "https://api.example.com/graphql"));
-                Settings.Add(new NodeSetting("Query", "query { health }"));
-                Settings.Add(new NodeSetting("Variables", "{}"));
-                Settings.Add(new NodeSetting("Headers", "{}"));
-                Settings.Add(new NodeSetting("AuthType", "WindowsIntegrated"));
-                Settings.Add(new NodeSetting("AuthUsername", ""));
-                Settings.Add(new NodeSetting("AuthPassword", ""));
-                Settings.Add(new NodeSetting("AuthToken", ""));
-                Settings.Add(new NodeSetting("ApiKeyName", ""));
-                Settings.Add(new NodeSetting("ApiKeyValue", ""));
-                Settings.Add(new NodeSetting("ApiKeyLocation", "Header"));
-                Settings.Add(new NodeSetting("OAuthTokenUrl", ""));
-                Settings.Add(new NodeSetting("OAuthClientId", ""));
-                Settings.Add(new NodeSetting("OAuthClientSecret", ""));
-                Settings.Add(new NodeSetting("OAuthScope", ""));
-            }
-            else if (type == "Sql")
-            {
-                Settings.Add(new NodeSetting("Connection", ""));
-                Settings.Add(new NodeSetting("Query", "SELECT 1"));
-                Settings.Add(new NodeSetting("AuthType", "WindowsIntegrated"));
-                Settings.Add(new NodeSetting("AuthUsername", ""));
-                Settings.Add(new NodeSetting("AuthPassword", ""));
-            }
-            else if (type == "Timer")
-            {
-                Settings.Add(new NodeSetting("DelayMs", "1000"));
-            }
-            else if (type == "Loop")
-            {
-                Settings.Add(new NodeSetting("Iterations", "1"));
-            }
-            else if (type == "Foreach")
-            {
-                Settings.Add(new NodeSetting("SourceVariable", "items"));
-            }
-            else if (type == "If")
-            {
-                Settings.Add(new NodeSetting("Condition", "${status} == 200"));
-            }
-            else if (type == "Threads")
-            {
-                Settings.Add(new NodeSetting("ThreadCount", "1"));
-                Settings.Add(new NodeSetting("RampUpSeconds", "1"));
-            }
-            else if (type == "Assert")
-            {
-                Settings.Add(new NodeSetting("Expected", ""));
-                Settings.Add(new NodeSetting("Actual", ""));
-            }
-            else if (type == "VariableExtractor")
-            {
-                Settings.Add(new NodeSetting("Pattern", ""));
-                Settings.Add(new NodeSetting("VariableName", ""));
-            }
-            else if (type == "Script")
-            {
-                Settings.Add(new NodeSetting("Language", "CSharp"));
-                Settings.Add(new NodeSetting("Code", ""));
-            }
-            else if (type == "Config")
-            {
-                Settings.Add(new NodeSetting("BaseUrl", ""));
-            }
-            else if (type == "TestPlan")
-            {
-                Settings.Add(new NodeSetting("Description", ""));
-            }
-            else if (type == "Project")
-            {
-                Settings.Add(new NodeSetting("Description", ""));
-                Settings.Add(new NodeSetting("Environment", "dev"));
-            }
-        }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-    }
-
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         public ObservableCollection<PlanNode> RootNodes { get; } = new ObservableCollection<PlanNode>();
@@ -450,6 +59,7 @@ namespace Test_Automation
         private bool _isNormalizingVariables;
         private int _variableUsageVersion;
         private Dictionary<string, List<string>> _variableUsageMap = new(StringComparer.OrdinalIgnoreCase);
+        private string? _currentProjectFilePath;
         private string _jsonPreview = "{}";
         private string _previewRequest = "Select a component to see request preview.";
         private string _previewResponse = "Select a component to see response preview.";
@@ -915,6 +525,7 @@ namespace Test_Automation
             InitializeComponent();
             DataContext = this;
             RootNodes.CollectionChanged += RootNodes_CollectionChanged;
+            UpdateWindowTitle();
             RefreshEnvironmentOptions();
             RebuildVariableUsageMap();
             RefreshJsonPreview();
@@ -933,6 +544,8 @@ namespace Test_Automation
                 var root = new PlanNode("Project", "Project");
                 RootNodes.Add(root);
                 SelectedNode = root;
+                _currentProjectFilePath = null;
+                UpdateWindowTitle();
                 RefreshEnvironmentOptions();
                 RefreshJsonPreview();
                 UpdateProjectVariablesPreview();
@@ -945,8 +558,32 @@ namespace Test_Automation
 
         private void SaveProjectButton_Click(object sender, RoutedEventArgs e)
         {
-            var projectNode = RootNodes.FirstOrDefault(node => node.Type == "Project");
-            if (projectNode == null)
+            if (!TryGetProjectNode(out var projectNode))
+            {
+                MessageBox.Show("Create or load a Project first.", "Save Project", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_currentProjectFilePath))
+            {
+                SaveProjectAsButton_Click(sender, e);
+                return;
+            }
+
+            try
+            {
+                SaveProjectToFile(_currentProjectFilePath, projectNode);
+                MessageBox.Show("Project saved successfully.", "Save Project", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save project: {ex.Message}", "Save Project", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SaveProjectAsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!TryGetProjectNode(out var projectNode))
             {
                 MessageBox.Show("Create or load a Project first.", "Save Project", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -956,7 +593,9 @@ namespace Test_Automation
             {
                 Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
                 DefaultExt = ".json",
-                FileName = $"{projectNode.Name}.json"
+                FileName = !string.IsNullOrWhiteSpace(_currentProjectFilePath)
+                    ? Path.GetFileName(_currentProjectFilePath)
+                    : $"{projectNode.Name}.json"
             };
 
             if (dialog.ShowDialog() != true)
@@ -964,6 +603,21 @@ namespace Test_Automation
                 return;
             }
 
+            try
+            {
+                SaveProjectToFile(dialog.FileName, projectNode);
+                _currentProjectFilePath = dialog.FileName;
+                UpdateWindowTitle();
+                MessageBox.Show("Project saved successfully.", "Save Project", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save project: {ex.Message}", "Save Project", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private static void SaveProjectToFile(string filePath, PlanNode projectNode)
+        {
             var model = new ProjectFileModel
             {
                 Version = 1,
@@ -975,8 +629,28 @@ namespace Test_Automation
                 WriteIndented = true
             });
 
-            File.WriteAllText(dialog.FileName, json);
-            MessageBox.Show("Project saved successfully.", "Save Project", MessageBoxButton.OK, MessageBoxImage.Information);
+            File.WriteAllText(filePath, json);
+        }
+
+        private bool TryGetProjectNode(out PlanNode projectNode)
+        {
+            var found = RootNodes.FirstOrDefault(node => node.Type == "Project");
+            if (found == null)
+            {
+                projectNode = null!;
+                return false;
+            }
+
+            projectNode = found;
+            return true;
+        }
+
+        private void UpdateWindowTitle()
+        {
+            var suffix = string.IsNullOrWhiteSpace(_currentProjectFilePath)
+                ? "Unsaved"
+                : Path.GetFileName(_currentProjectFilePath);
+            Title = $"Test Automation - {suffix}";
         }
 
         private void LoadProjectButton_Click(object sender, RoutedEventArgs e)
@@ -1013,6 +687,8 @@ namespace Test_Automation
                 RootNodes.Clear();
                 RootNodes.Add(root);
                 SelectedNode = root;
+                _currentProjectFilePath = dialog.FileName;
+                UpdateWindowTitle();
                 RefreshEnvironmentOptions();
                 RefreshJsonPreview();
                 UpdateProjectVariablesPreview();

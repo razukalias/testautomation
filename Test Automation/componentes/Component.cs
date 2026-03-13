@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Test_Automation.Models.Editor;
 using Test_Automation.Models;
 
 namespace Test_Automation.Componentes
@@ -14,7 +15,7 @@ namespace Test_Automation.Componentes
         public Component? Parent { get; set; }
         public List<Component> Children { get; set; } = new List<Component>();
         public Dictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
-        public List<Test_Automation.VariableExtractionRule> Extractors { get; set; } = new List<Test_Automation.VariableExtractionRule>();
+        public List<VariableExtractionRule> Extractors { get; set; } = new List<VariableExtractionRule>();
 
         protected Component()
         {

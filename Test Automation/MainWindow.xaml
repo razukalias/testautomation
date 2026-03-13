@@ -4,14 +4,15 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Test_Automation"
+        xmlns:conv="clr-namespace:Test_Automation.Converters"
         mc:Ignorable="d"
         Title="Test Automation" Height="650" Width="1100">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
-        <local:VariableUsageLabelConverter x:Key="VariableUsageLabelConverter" />
-        <local:VariableUsageTooltipConverter x:Key="VariableUsageTooltipConverter" />
-        <local:VariableSettingUsageLabelConverter x:Key="VariableSettingUsageLabelConverter" />
-        <local:VariableSettingUsageTooltipConverter x:Key="VariableSettingUsageTooltipConverter" />
+        <conv:VariableUsageLabelConverter x:Key="VariableUsageLabelConverter" />
+        <conv:VariableUsageTooltipConverter x:Key="VariableUsageTooltipConverter" />
+        <conv:VariableSettingUsageLabelConverter x:Key="VariableSettingUsageLabelConverter" />
+        <conv:VariableSettingUsageTooltipConverter x:Key="VariableSettingUsageTooltipConverter" />
     </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -30,10 +31,16 @@
                     Click="AddProjectButton_Click" />
                 <Button x:Name="SaveProjectButton"
                     Height="32"
-                    Width="90"
+                    Width="70"
                     Margin="0,0,8,0"
-                    Content="Save JSON"
+                    Content="Save"
                     Click="SaveProjectButton_Click" />
+                <Button x:Name="SaveProjectAsButton"
+                    Height="32"
+                    Width="80"
+                    Margin="0,0,8,0"
+                    Content="Save As"
+                    Click="SaveProjectAsButton_Click" />
                 <Button x:Name="LoadProjectButton"
                     Height="32"
                     Width="90"
