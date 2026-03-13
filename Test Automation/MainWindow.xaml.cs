@@ -2834,7 +2834,7 @@ namespace Test_Automation
 
             if (string.Equals(source, "PreviewResponse", StringComparison.OrdinalIgnoreCase))
             {
-                return PreviewResponse;
+                return ExpandEmbeddedJsonStringsInJsonText(PreviewResponse);
             }
 
             if (string.Equals(source, "PreviewLogs", StringComparison.OrdinalIgnoreCase))
@@ -2852,6 +2852,98 @@ namespace Test_Automation
             }
 
             return null;
+        }
+
+        private static string ExpandEmbeddedJsonStringsInJsonText(string jsonText)
+        {
+            if (string.IsNullOrWhiteSpace(jsonText))
+            {
+                return jsonText;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(jsonText);
+                var normalized = ConvertJsonElementForExtraction(doc.RootElement);
+                return JsonSerializer.Serialize(normalized, new JsonSerializerOptions { WriteIndented = true });
+            }
+            catch
+            {
+                return jsonText;
+            }
+        }
+
+        private static object? ConvertJsonElementForExtraction(JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                {
+                    var obj = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        obj[property.Name] = ConvertJsonElementForExtraction(property.Value);
+                    }
+
+                    return obj;
+                }
+                case JsonValueKind.Array:
+                {
+                    var list = new List<object?>();
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        list.Add(ConvertJsonElementForExtraction(item));
+                    }
+
+                    return list;
+                }
+                case JsonValueKind.String:
+                {
+                    var text = element.GetString() ?? string.Empty;
+                    if (TryParseJsonString(text, out var parsed))
+                    {
+                        return ConvertJsonElementForExtraction(parsed);
+                    }
+
+                    return text;
+                }
+                case JsonValueKind.Number:
+                    return element.GetRawText();
+                case JsonValueKind.True:
+                    return true;
+                case JsonValueKind.False:
+                    return false;
+                case JsonValueKind.Null:
+                default:
+                    return null;
+            }
+        }
+
+        private static bool TryParseJsonString(string text, out JsonElement parsedElement)
+        {
+            parsedElement = default;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            var trimmed = text.Trim();
+            if (!(trimmed.StartsWith("{") && trimmed.EndsWith("}"))
+                && !(trimmed.StartsWith("[") && trimmed.EndsWith("]")))
+            {
+                return false;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                parsedElement = doc.RootElement.Clone();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static bool TryExtractJsonPath(string json, string path, out string extracted)
@@ -3532,6 +3624,314 @@ namespace Test_Automation
 
             SelectedNode.Extractors.Remove(extractor);
             RefreshJsonPreview();
+        }
+
+        private void ExploreJsonPathButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || sender is not Button button || button.DataContext is not VariableExtractionRule extractor)
+            {
+                return;
+            }
+
+            var sourceValue = ResolvePreviewSourceValue(extractor.Source);
+            if (string.IsNullOrWhiteSpace(sourceValue))
+            {
+                MessageBox.Show("Selected source is empty. Run or preview the component first.", "JSON Path Explorer", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (!TryParseJsonRoot(sourceValue, out var rootElement))
+            {
+                MessageBox.Show("Selected source is not a valid JSON document.", "JSON Path Explorer", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var selectedPath = ShowJsonPathPicker(rootElement, extractor.JsonPath);
+            if (string.IsNullOrWhiteSpace(selectedPath))
+            {
+                return;
+            }
+
+            extractor.JsonPath = selectedPath;
+            RefreshJsonPreview();
+        }
+
+        private static bool TryParseJsonRoot(string json, out JsonElement rootElement)
+        {
+            rootElement = default;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                rootElement = doc.RootElement.Clone();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private string? ShowJsonPathPicker(JsonElement rootElement, string currentPath)
+        {
+            var dialog = new Window
+            {
+                Title = "JSON Path Explorer",
+                Width = 900,
+                Height = 500,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                ResizeMode = ResizeMode.CanResize,
+                MinWidth = 700,
+                MinHeight = 350
+            };
+
+            var root = new Grid
+            {
+                Margin = new Thickness(12)
+            };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var header = new TextBlock
+            {
+                Text = "Select JSON path:",
+                Margin = new Thickness(0, 0, 0, 8),
+                FontWeight = FontWeights.SemiBold
+            };
+            Grid.SetRow(header, 0);
+            root.Children.Add(header);
+
+            var contentGrid = new Grid();
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var tree = new TreeView
+            {
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+
+            var rootItem = CreateJsonTreeItem("$", "$", rootElement);
+            rootItem.IsExpanded = true;
+            tree.Items.Add(rootItem);
+
+            var valuePreview = new TextBox
+            {
+                Margin = new Thickness(10, 0, 0, 10),
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12,
+                IsReadOnly = true,
+                AcceptsReturn = true,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+            };
+
+            var selectedPathBox = new TextBox
+            {
+                Margin = new Thickness(0, 0, 0, 10),
+                IsReadOnly = true,
+                FontFamily = new FontFamily("Consolas")
+            };
+
+            tree.SelectedItemChanged += (_, _) =>
+            {
+                if (tree.SelectedItem is not TreeViewItem selectedItem)
+                {
+                    return;
+                }
+
+                selectedPathBox.Text = selectedItem.Tag as string ?? string.Empty;
+                if (selectedItem.DataContext is JsonElement selectedElement)
+                {
+                    valuePreview.Text = GetJsonElementPreview(selectedElement);
+                }
+                else
+                {
+                    valuePreview.Text = string.Empty;
+                }
+            };
+
+            if (!string.IsNullOrWhiteSpace(currentPath))
+            {
+                var matched = FindTreeItemByPath(rootItem, currentPath);
+                if (matched != null)
+                {
+                    ExpandParents(matched);
+                    matched.IsSelected = true;
+                }
+            }
+            else
+            {
+                rootItem.IsSelected = true;
+            }
+
+            Grid.SetColumn(tree, 0);
+            Grid.SetColumn(valuePreview, 1);
+            contentGrid.Children.Add(tree);
+            contentGrid.Children.Add(valuePreview);
+
+            Grid.SetRow(contentGrid, 1);
+            root.Children.Add(contentGrid);
+
+            Grid.SetRow(selectedPathBox, 2);
+            root.Children.Add(selectedPathBox);
+
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            var cancelButton = new Button
+            {
+                Content = "Cancel",
+                Width = 80,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            cancelButton.Click += (_, _) => dialog.DialogResult = false;
+
+            var okButton = new Button
+            {
+                Content = "Use Path",
+                Width = 90,
+                IsDefault = true
+            };
+            okButton.Click += (_, _) => dialog.DialogResult = !string.IsNullOrWhiteSpace(selectedPathBox.Text);
+
+            buttonPanel.Children.Add(cancelButton);
+            buttonPanel.Children.Add(okButton);
+            Grid.SetRow(buttonPanel, 3);
+            root.Children.Add(buttonPanel);
+
+            dialog.Content = root;
+
+            var accepted = dialog.ShowDialog();
+            if (accepted != true || string.IsNullOrWhiteSpace(selectedPathBox.Text))
+            {
+                return null;
+            }
+
+            return selectedPathBox.Text;
+        }
+
+        private static TreeViewItem CreateJsonTreeItem(string label, string path, JsonElement element)
+        {
+            var item = new TreeViewItem
+            {
+                Header = BuildJsonTreeLabel(label, element),
+                Tag = path,
+                DataContext = element
+            };
+
+            if (element.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in element.EnumerateObject())
+                {
+                    var childPath = path + "." + property.Name;
+                    item.Items.Add(CreateJsonTreeItem(property.Name, childPath, property.Value));
+                }
+            }
+            else if (element.ValueKind == JsonValueKind.Array)
+            {
+                var index = 0;
+                foreach (var child in element.EnumerateArray())
+                {
+                    var childLabel = "[" + index + "]";
+                    var childPath = path + childLabel;
+                    item.Items.Add(CreateJsonTreeItem(childLabel, childPath, child));
+                    index++;
+                }
+            }
+            else if (element.ValueKind == JsonValueKind.String)
+            {
+                var stringValue = element.GetString() ?? string.Empty;
+                if (TryParseJsonString(stringValue, out var embeddedJson))
+                {
+                    if (embeddedJson.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var property in embeddedJson.EnumerateObject())
+                        {
+                            var childPath = path + "." + property.Name;
+                            item.Items.Add(CreateJsonTreeItem(property.Name, childPath, property.Value));
+                        }
+                    }
+                    else if (embeddedJson.ValueKind == JsonValueKind.Array)
+                    {
+                        var index = 0;
+                        foreach (var child in embeddedJson.EnumerateArray())
+                        {
+                            var childLabel = "[" + index + "]";
+                            var childPath = path + childLabel;
+                            item.Items.Add(CreateJsonTreeItem(childLabel, childPath, child));
+                            index++;
+                        }
+                    }
+                }
+            }
+
+            return item;
+        }
+
+        private static string BuildJsonTreeLabel(string label, JsonElement element)
+        {
+            return element.ValueKind switch
+            {
+                JsonValueKind.Object => label + " (object)",
+                JsonValueKind.Array => label + " (array)",
+                JsonValueKind.String => label + " = \"" + (element.GetString() ?? string.Empty) + "\"",
+                JsonValueKind.Number => label + " = " + element.GetRawText(),
+                JsonValueKind.True => label + " = true",
+                JsonValueKind.False => label + " = false",
+                JsonValueKind.Null => label + " = null",
+                _ => label
+            };
+        }
+
+        private static string GetJsonElementPreview(JsonElement element)
+        {
+            return element.ValueKind switch
+            {
+                JsonValueKind.String => element.GetString() ?? string.Empty,
+                JsonValueKind.Number => element.GetRawText(),
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                JsonValueKind.Null => "null",
+                _ => element.GetRawText()
+            };
+        }
+
+        private static TreeViewItem? FindTreeItemByPath(TreeViewItem current, string path)
+        {
+            if (string.Equals(current.Tag as string, path, StringComparison.Ordinal))
+            {
+                return current;
+            }
+
+            foreach (var child in current.Items)
+            {
+                if (child is TreeViewItem childItem)
+                {
+                    var found = FindTreeItemByPath(childItem, path);
+                    if (found != null)
+                    {
+                        return found;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static void ExpandParents(TreeViewItem item)
+        {
+            var current = item;
+            while (current != null)
+            {
+                current.IsExpanded = true;
+                current = current.Parent as TreeViewItem;
+            }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

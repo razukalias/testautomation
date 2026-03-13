@@ -749,12 +749,13 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Source Field" FontWeight="SemiBold" />
                                 <TextBlock Grid.Column="1" Text="JSON Path" FontWeight="SemiBold" />
-                                <TextBlock Grid.Column="2" Text="Variable Name" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="3" Text="Variable Name" FontWeight="SemiBold" />
                             </Grid>
 
                             <ScrollViewer Height="100" VerticalScrollBarVisibility="Auto">
@@ -765,6 +766,7 @@
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
@@ -775,7 +777,14 @@
                                                           IsTextSearchEnabled="True"
                                                           Text="{Binding Source, UpdateSourceTrigger=PropertyChanged}" />
                                                 <TextBox Grid.Column="1" Margin="0,0,6,0" Text="{Binding JsonPath, UpdateSourceTrigger=PropertyChanged}" />
-                                                <Grid Grid.Column="2" Margin="0,0,6,0">
+                                                <Button Grid.Column="2"
+                                                        Margin="0,0,6,0"
+                                                        Width="32"
+                                                        Height="24"
+                                                        Content="..."
+                                                        ToolTip="Explore JSON paths"
+                                                        Click="ExploreJsonPathButton_Click" />
+                                                <Grid Grid.Column="3" Margin="0,0,6,0">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
@@ -796,7 +805,7 @@
                                                         </TextBlock.ToolTip>
                                                     </TextBlock>
                                                 </Grid>
-                                                <Button Grid.Column="3" Content="X" Width="26" Height="24" Click="RemoveExtractorButton_Click" />
+                                                <Button Grid.Column="4" Content="X" Width="26" Height="24" Click="RemoveExtractorButton_Click" />
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
