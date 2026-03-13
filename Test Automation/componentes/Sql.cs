@@ -36,13 +36,13 @@ namespace Test_Automation.Componentes
             if (!string.IsNullOrWhiteSpace(data.ConnectionString) && !string.IsNullOrWhiteSpace(data.Query))
             {
                 using var connection = new SqlConnection(data.ConnectionString);
-                await connection.OpenAsync();
+                await connection.OpenAsync(context.StopToken);
                 using var command = new SqlCommand(data.Query, connection);
 
-                using var reader = await command.ExecuteReaderAsync();
+                using var reader = await command.ExecuteReaderAsync(context.StopToken);
                 if (reader.FieldCount > 0)
                 {
-                    while (await reader.ReadAsync())
+                    while (await reader.ReadAsync(context.StopToken))
                     {
                         var row = new Dictionary<string, object>();
                         for (var i = 0; i < reader.FieldCount; i++)

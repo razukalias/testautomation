@@ -76,9 +76,9 @@ namespace Test_Automation.Componentes
                     }
                 }
 
-                using var response = await client.SendAsync(request);
+                using var response = await client.SendAsync(request, context.StopToken);
                 data.ResponseStatus = (int)response.StatusCode;
-                data.ResponseBody = await response.Content.ReadAsStringAsync();
+                data.ResponseBody = await response.Content.ReadAsStringAsync(context.StopToken);
             }
 
             return data;

@@ -51,6 +51,17 @@ namespace Test_Automation.Services
                 context.IsRunning = false;
                 context.EndTime = summary.EndTime;
             }
+            catch (OperationCanceledException)
+            {
+                context.Status = "stopped";
+                context.IsRunning = false;
+                context.EndTime = DateTime.UtcNow;
+                summary.EndTime = context.EndTime.Value;
+                summary.TotalDurationMs = (long)(summary.EndTime - summary.StartTime).TotalMilliseconds;
+                summary.TotalComponents = context.Results.Count;
+                summary.PassedComponents = context.Results.Count(r => r.Passed);
+                summary.FailedComponents = context.Results.Count(r => !r.Passed);
+            }
             catch (Exception ex)
             {
                 context.Status = "failed";
@@ -87,6 +98,17 @@ namespace Test_Automation.Services
                 context.Status = summary.Status;
                 context.IsRunning = false;
                 context.EndTime = summary.EndTime;
+            }
+            catch (OperationCanceledException)
+            {
+                context.Status = "stopped";
+                context.IsRunning = false;
+                context.EndTime = DateTime.UtcNow;
+                summary.EndTime = context.EndTime.Value;
+                summary.TotalDurationMs = (long)(summary.EndTime - summary.StartTime).TotalMilliseconds;
+                summary.TotalComponents = context.Results.Count;
+                summary.PassedComponents = context.Results.Count(r => r.Passed);
+                summary.FailedComponents = context.Results.Count(r => !r.Passed);
             }
             catch (Exception ex)
             {

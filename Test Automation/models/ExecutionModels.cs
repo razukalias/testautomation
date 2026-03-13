@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Text.Json.Serialization;
+using System.Threading;
 
 namespace Test_Automation.Models
 {
@@ -11,6 +12,7 @@ namespace Test_Automation.Models
     public class ExecutionContext
     {
         private ConcurrentDictionary<string, object> _variables = new ConcurrentDictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        private CancellationTokenSource _stopSource = new CancellationTokenSource();
 
         [JsonPropertyName("executionId")]
         public string ExecutionId { get; set; } = Guid.NewGuid().ToString();
@@ -38,6 +40,35 @@ namespace Test_Automation.Models
 
         [JsonPropertyName("isRunning")]
         public bool IsRunning { get; set; } = true;
+
+        [JsonIgnore]
+        public CancellationToken StopToken => _stopSource.Token;
+
+        public void RequestStop()
+        {
+            IsRunning = false;
+            Status = "stopping";
+            if (!_stopSource.IsCancellationRequested)
+            {
+                _stopSource.Cancel();
+            }
+        }
+
+        public void ResetStopRequest()
+        {
+            if (_stopSource.IsCancellationRequested)
+            {
+                _stopSource.Dispose();
+                _stopSource = new CancellationTokenSource();
+            }
+
+            IsRunning = true;
+            if (string.Equals(Status, "stopping", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Status, "stopped", StringComparison.OrdinalIgnoreCase))
+            {
+                Status = "running";
+            }
+        }
 
         public void SetVariable(string key, object value)
         {

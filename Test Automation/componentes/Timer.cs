@@ -16,10 +16,10 @@ namespace Test_Automation.Componentes
 
         public override Task<ComponentData> Execute(Test_Automation.Models.ExecutionContext context)
         {
-            return ExecuteTimerAsync();
+            return ExecuteTimerAsync(context);
         }
 
-        private async Task<ComponentData> ExecuteTimerAsync()
+        private async Task<ComponentData> ExecuteTimerAsync(Test_Automation.Models.ExecutionContext context)
         {
             var data = new TimerData { Id = this.Id, ComponentName = this.Name };
 
@@ -31,7 +31,18 @@ namespace Test_Automation.Componentes
 
             if (delayMs > 0)
             {
-                await Task.Delay(delayMs);
+                var remaining = delayMs;
+                while (remaining > 0)
+                {
+                    if (!context.IsRunning || context.StopToken.IsCancellationRequested)
+                    {
+                        throw new OperationCanceledException("Timer execution stopped by user.");
+                    }
+
+                    var wait = Math.Min(remaining, 200);
+                    await Task.Delay(wait, context.StopToken);
+                    remaining -= wait;
+                }
             }
 
             data.DelayMs = delayMs;

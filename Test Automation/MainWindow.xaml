@@ -53,6 +53,13 @@
                     Width="120"
                     Content="Run TestPlan"
                     Click="RunTestPlanButton_Click" />
+                <Button x:Name="StopRunButton"
+                    Height="32"
+                    Width="90"
+                    Margin="8,0,0,0"
+                    Content="Stop"
+                    IsEnabled="False"
+                    Click="StopRunButton_Click" />
             </StackPanel>
             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
                 <TextBlock VerticalAlignment="Center" Text="Environment" Margin="0,0,8,0" />

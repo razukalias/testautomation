@@ -75,7 +75,7 @@ namespace Test_Automation.Componentes
                     request.Content = new StringContent(data.Body, Encoding.UTF8, "application/json");
                 }
 
-                using var response = await client.SendAsync(request);
+                using var response = await client.SendAsync(request, context.StopToken);
                 data.ResponseStatus = (int)response.StatusCode;
                 foreach (var header in response.Headers)
                 {
@@ -87,7 +87,7 @@ namespace Test_Automation.Componentes
                     data.ResponseHeaders[header.Key] = string.Join(", ", header.Value);
                 }
 
-                data.ResponseBody = await response.Content.ReadAsStringAsync();
+                data.ResponseBody = await response.Content.ReadAsStringAsync(context.StopToken);
             }
 
             return data;

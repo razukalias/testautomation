@@ -105,6 +105,8 @@ namespace Test_Automation
         private string _variablesPreview = "{}";
         private string _runtimeTraceLogBuffer = string.Empty;
         private Test_Automation.Models.ExecutionContext? _lastExecutionContext;
+        private Test_Automation.Models.ExecutionContext? _activeExecutionContext;
+        private bool _isRunInProgress;
 
         public PlanNode? SelectedNode
         {
@@ -652,6 +654,40 @@ namespace Test_Automation
             RefreshJsonPreview();
         }
 
+        private void StopRunButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_isRunInProgress || _activeExecutionContext == null)
+            {
+                return;
+            }
+
+            _activeExecutionContext.Status = "stopping";
+            _activeExecutionContext.RequestStop();
+
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            PreviewLogs = string.Join("\n", new[]
+            {
+                PreviewLogs,
+                $"[{timestamp}] Stop requested by user. Finishing current step..."
+            });
+        }
+
+        private void SetRunState(bool isRunning, Test_Automation.Models.ExecutionContext? context = null)
+        {
+            _isRunInProgress = isRunning;
+            _activeExecutionContext = isRunning ? context : null;
+
+            if (RunTestPlanButton != null)
+            {
+                RunTestPlanButton.IsEnabled = !isRunning;
+            }
+
+            if (StopRunButton != null)
+            {
+                StopRunButton.IsEnabled = isRunning;
+            }
+        }
+
         private void AddProjectButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -848,6 +884,9 @@ namespace Test_Automation
             try
             {
                 var context = new Test_Automation.Models.ExecutionContext();
+                context.ResetStopRequest();
+                context.Status = "running";
+                SetRunState(true, context);
                 ApplyProjectVariables(context);
                 var summary = await runner.RunTestPlanWithContext(testPlanComponent, context);
                 var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
@@ -867,6 +906,16 @@ namespace Test_Automation
                 RefreshComponentPreview();
                 AppendRuntimeTraceBufferToPreviewLogs();
             }
+            catch (OperationCanceledException)
+            {
+                var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                PreviewLogs = string.Join("\n", new[]
+                {
+                    PreviewLogs,
+                    $"[{endTimestamp}] Run stopped by user."
+                });
+                AppendRuntimeTraceBufferToPreviewLogs();
+            }
             catch (Exception ex)
             {
                 var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
@@ -877,6 +926,10 @@ namespace Test_Automation
                 });
                 AppendRuntimeTraceBufferToPreviewLogs();
                 VariablesPreview = "{}";
+            }
+            finally
+            {
+                SetRunState(false);
             }
         }
 
@@ -986,6 +1039,9 @@ namespace Test_Automation
             try
             {
                 var context = _lastExecutionContext ?? new Test_Automation.Models.ExecutionContext();
+                context.ResetStopRequest();
+                context.Status = "running";
+                SetRunState(true, context);
                 ApplyProjectVariables(context);
                 var result = await executor.ExecuteComponentTree(component, context);
                 context.Results.Add(result);
@@ -1007,6 +1063,16 @@ namespace Test_Automation
                 RefreshComponentPreview();
                 AppendRuntimeTraceBufferToPreviewLogs();
             }
+            catch (OperationCanceledException)
+            {
+                var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                PreviewLogs = string.Join("\n", new[]
+                {
+                    PreviewLogs,
+                    $"[{endTimestamp}] Run stopped by user."
+                });
+                AppendRuntimeTraceBufferToPreviewLogs();
+            }
             catch (Exception ex)
             {
                 var endTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
@@ -1017,6 +1083,10 @@ namespace Test_Automation
                 });
                 AppendRuntimeTraceBufferToPreviewLogs();
                 VariablesPreview = "{}";
+            }
+            finally
+            {
+                SetRunState(false);
             }
         }
 
@@ -1532,6 +1602,24 @@ namespace Test_Automation
             foreach (var setting in source.Settings)
             {
                 copy.Settings.Add(new NodeSetting(setting.Key, setting.Value));
+            }
+
+            copy.Variables.Clear();
+            foreach (var variable in source.Variables)
+            {
+                copy.Variables.Add(new NodeSetting(variable.Key, variable.Value));
+            }
+
+            copy.Extractors.Clear();
+            foreach (var extractor in source.Extractors)
+            {
+                copy.Extractors.Add(new VariableExtractionRule(extractor.Source, extractor.JsonPath, extractor.VariableName));
+            }
+
+            copy.Assertions.Clear();
+            foreach (var assertion in source.Assertions)
+            {
+                copy.Assertions.Add(new AssertionRule(assertion.Source, assertion.JsonPath, assertion.Condition, assertion.Expected, assertion.Mode));
             }
 
             foreach (var child in source.Children)

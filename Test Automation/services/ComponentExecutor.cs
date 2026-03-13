@@ -26,10 +26,20 @@ namespace Test_Automation.Services
             Trace?.Invoke(message);
         }
 
+        private static void ThrowIfStopped(Test_Automation.Models.ExecutionContext context, string scope)
+        {
+            if (context == null || !context.IsRunning || context.StopToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException($"Execution stopped: {scope}");
+            }
+        }
+
         public async Task<ExecutionResult> ExecuteComponent(Component component, Test_Automation.Models.ExecutionContext context)
         {
             if (component == null || context == null)
                 throw new ArgumentNullException(nameof(component));
+
+            ThrowIfStopped(context, component.Name);
 
             var result = new ExecutionResult
             {
@@ -79,6 +89,14 @@ namespace Test_Automation.Services
                 }
 
                 result.Output = componentData?.ToString();
+            }
+            catch (OperationCanceledException ex)
+            {
+                result.Error = ex.Message;
+                result.MarkAsCompleted(false);
+                result.Status = "stopped";
+                TraceLog($"ExecuteComponent canceled: {component.Name}. {ex.Message}");
+                throw;
             }
             catch (Exception ex)
             {
@@ -786,6 +804,7 @@ namespace Test_Automation.Services
 
         public async Task<ExecutionResult> ExecuteComponentTree(Component component, Test_Automation.Models.ExecutionContext context)
         {
+            ThrowIfStopped(context, component.Name);
             TraceLog($"ExecuteComponentTree enter: {component.Name} ({component.GetType().Name})");
             if (component is Threads threadsComponent)
             {
@@ -828,6 +847,7 @@ namespace Test_Automation.Services
                 var childResults = new List<ExecutionResult>();
                 foreach (var child in component.Children)
                 {
+                    ThrowIfStopped(context, child.Name);
                     var childResult = await ExecuteComponentTree(child, context);
                     childResults.Add(childResult);
                     lock (context.Results)
@@ -844,6 +864,7 @@ namespace Test_Automation.Services
 
         private async Task<ExecutionResult> ExecuteLoop(Loop loopComponent, Test_Automation.Models.ExecutionContext context)
         {
+            ThrowIfStopped(context, loopComponent.Name);
             var result = await ExecuteComponent(loopComponent, context);
 
             var iterations = 1;
@@ -859,9 +880,11 @@ namespace Test_Automation.Services
             var previousIndex = context.GetVariable("LoopIndex");
             for (var i = 0; i < iterations; i++)
             {
+                ThrowIfStopped(context, $"{loopComponent.Name} iteration {i}");
                 context.SetVariable("LoopIndex", i);
                 foreach (var child in loopComponent.Children)
                 {
+                    ThrowIfStopped(context, child.Name);
                     var childResult = await ExecuteComponentTree(child, context);
                     lock (context.Results)
                     {
@@ -880,6 +903,7 @@ namespace Test_Automation.Services
 
         private async Task<ExecutionResult> ExecuteIf(If ifComponent, Test_Automation.Models.ExecutionContext context)
         {
+            ThrowIfStopped(context, ifComponent.Name);
             var result = await ExecuteComponent(ifComponent, context);
             var condition = ifComponent.Settings.TryGetValue("Condition", out var value) ? value : string.Empty;
             var conditionMet = EvaluateCondition(condition, context);
@@ -895,6 +919,7 @@ namespace Test_Automation.Services
             {
                 foreach (var child in ifComponent.Children)
                 {
+                    ThrowIfStopped(context, child.Name);
                     var childResult = await ExecuteComponentTree(child, context);
                     lock (context.Results)
                     {
@@ -908,6 +933,7 @@ namespace Test_Automation.Services
 
         private async Task<ExecutionResult> ExecuteForeach(Foreach foreachComponent, Test_Automation.Models.ExecutionContext context)
         {
+            ThrowIfStopped(context, foreachComponent.Name);
             var result = await ExecuteComponent(foreachComponent, context);
             var sourceVariable = foreachComponent.Settings.TryGetValue("SourceVariable", out var value)
                 ? value
@@ -921,11 +947,13 @@ namespace Test_Automation.Services
             var index = 0;
             foreach (var item in collection)
             {
+                ThrowIfStopped(context, $"{foreachComponent.Name} iteration {index}");
                 TraceLog($"ExecuteForeach iteration index={index}, itemType={item?.GetType().Name ?? "<null>"}.");
                 context.SetVariable("CurrentItem", item);
                 context.SetVariable("CurrentIndex", index);
                 foreach (var child in foreachComponent.Children)
                 {
+                    ThrowIfStopped(context, child.Name);
                     var childResult = await ExecuteComponentTree(child, context);
                     lock (context.Results)
                     {
@@ -1093,6 +1121,7 @@ namespace Test_Automation.Services
 
         public async Task<ExecutionResult> ExecuteThreadGroup(Threads threadComponent, Test_Automation.Models.ExecutionContext context, int threadCount = 1)
         {
+            ThrowIfStopped(context, threadComponent.Name);
             TraceLog($"ExecuteThreadGroup start: {threadComponent.Name}, threadCount={threadCount}.");
             var result = new ExecutionResult
             {
@@ -1120,6 +1149,14 @@ namespace Test_Automation.Services
                 result.MarkAsCompleted(true);
                 TraceLog($"ExecuteThreadGroup completed: {threadComponent.Name}.");
             }
+            catch (OperationCanceledException ex)
+            {
+                result.Error = ex.Message;
+                result.MarkAsCompleted(false);
+                result.Status = "stopped";
+                TraceLog($"ExecuteThreadGroup canceled: {ex.Message}");
+                throw;
+            }
             catch (Exception ex)
             {
                 result.Error = ex.Message;
@@ -1132,12 +1169,14 @@ namespace Test_Automation.Services
 
         private async Task ExecuteThreadChildren(Threads threadComponent, Test_Automation.Models.ExecutionContext context, int threadIndex)
         {
+            ThrowIfStopped(context, $"{threadComponent.Name} thread {threadIndex}");
             CurrentThreadIndex.Value = threadIndex;
             CurrentThreadGroupId.Value = threadComponent.Id;
             TraceLog($"ExecuteThreadChildren start: group={threadComponent.Name}, threadIndex={threadIndex}.");
 
             foreach (var child in threadComponent.Children)
             {
+                ThrowIfStopped(context, $"{threadComponent.Name} thread {threadIndex} child {child.Name}");
                 var childResult = await ExecuteComponentTree(child, context);
                 lock (context.Results)
                 {
