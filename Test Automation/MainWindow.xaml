@@ -60,6 +60,12 @@
                           ItemsSource="{Binding EnvironmentOptions}"
                           SelectedItem="{Binding SelectedEnvironment, UpdateSourceTrigger=PropertyChanged}" />
             </StackPanel>
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                <TextBlock VerticalAlignment="Center" Text="Trace Level" Margin="0,0,8,0" />
+                <ComboBox Width="170"
+                          ItemsSource="{Binding TraceLevelOptions}"
+                          SelectedItem="{Binding SelectedTraceLevel, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
 
                 <TreeView x:Name="PlanTreeView"
                           ItemsSource="{Binding RootNodes}"
@@ -88,7 +94,48 @@
                     </TreeView.ItemContainerStyle>
                     <TreeView.ItemTemplate>
                         <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                            <TextBlock Text="{Binding DisplayName}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding DisplayName}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#202020" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding AssertionSeverity}" Value="AssertFailed">
+                                                    <Setter Property="Foreground" Value="#B00020" />
+                                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding AssertionSeverity}" Value="ExpectFailed">
+                                                    <Setter Property="Foreground" Value="#A16207" />
+                                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding AssertionSeverity}" Value="Passed">
+                                                    <Setter Property="Foreground" Value="#166534" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Margin="8,0,0,0"
+                                           Text="{Binding AssertionSummaryLabel}"
+                                           Visibility="{Binding HasAssertionSummary, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#6B7280" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding AssertionSeverity}" Value="AssertFailed">
+                                                    <Setter Property="Foreground" Value="#B00020" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding AssertionSeverity}" Value="ExpectFailed">
+                                                    <Setter Property="Foreground" Value="#A16207" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding AssertionSeverity}" Value="Passed">
+                                                    <Setter Property="Foreground" Value="#166534" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
                         </HierarchicalDataTemplate>
                     </TreeView.ItemTemplate>
                 </TreeView>
@@ -814,6 +861,104 @@
 
                             <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                                 <Button Content="Add Extractor" Width="120" Click="AddExtractorButton_Click" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
+                            Visibility="{Binding IsComponentSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <StackPanel>
+                            <TextBlock Text="Assertions" FontWeight="SemiBold" Margin="0,0,0,6" />
+
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Mode" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="1" Text="Source" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="2" Text="JSON Path" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="4" Text="Condition" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="5" Text="Expected" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="6" Text="Status" FontWeight="SemiBold" />
+                            </Grid>
+
+                            <ScrollViewer Height="110" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding SelectedNode.Assertions}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,0,0,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="90" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="150" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <ComboBox Grid.Column="0"
+                                                          Margin="0,0,6,0"
+                                                          ItemsSource="{Binding DataContext.AssertionModeOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          SelectedItem="{Binding Mode, UpdateSourceTrigger=PropertyChanged}" />
+                                                <ComboBox Grid.Column="1"
+                                                          Margin="0,0,6,0"
+                                                          ItemsSource="{Binding DataContext.ExtractorSourceOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          IsEditable="True"
+                                                          IsTextSearchEnabled="True"
+                                                          Text="{Binding Source, UpdateSourceTrigger=PropertyChanged}" />
+                                                <TextBox Grid.Column="2" Margin="0,0,6,0" Text="{Binding JsonPath, UpdateSourceTrigger=PropertyChanged}" />
+                                                <Button Grid.Column="3"
+                                                        Margin="0,0,6,0"
+                                                        Width="32"
+                                                        Height="24"
+                                                        Content="..."
+                                                        ToolTip="Explore JSON paths"
+                                                        Click="ExploreJsonPathButton_Click" />
+                                                <ComboBox Grid.Column="4"
+                                                          Margin="0,0,6,0"
+                                                          ItemsSource="{Binding DataContext.AssertionConditionOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" />
+                                                <TextBox Grid.Column="5" Margin="0,0,6,0" Text="{Binding Expected, UpdateSourceTrigger=PropertyChanged}" />
+                                                <Border Grid.Column="6" Margin="0,0,6,0" CornerRadius="3" Padding="6,2" BorderBrush="#D1D5DB" BorderThickness="1">
+                                                    <TextBlock Text="{Binding StatusLabel}" ToolTip="{Binding StatusMessage}" HorizontalAlignment="Center">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="#6B7280" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding LastResultState}" Value="Passed">
+                                                                        <Setter Property="Foreground" Value="#166534" />
+                                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding LastResultState}" Value="AssertFailed">
+                                                                        <Setter Property="Foreground" Value="#B00020" />
+                                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding LastResultState}" Value="ExpectFailed">
+                                                                        <Setter Property="Foreground" Value="#A16207" />
+                                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Border>
+                                                <Button Grid.Column="7" Content="X" Width="26" Height="24" Click="RemoveAssertionButton_Click" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <Button Content="Add Assertion" Width="120" Click="AddAssertionButton_Click" />
                             </StackPanel>
                         </StackPanel>
                     </Border>

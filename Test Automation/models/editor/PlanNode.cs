@@ -14,6 +14,9 @@ namespace Test_Automation.Models.Editor
         private bool _isEnabled;
         private bool _isExpanded;
         private bool _isHighlighted;
+        private int _assertFailedCount;
+        private int _expectFailedCount;
+        private int _assertPassedCount;
 
         public string Name
         {
@@ -60,13 +63,80 @@ namespace Test_Automation.Models.Editor
             }
         }
 
+        public int AssertFailedCount
+        {
+            get => _assertFailedCount;
+            set
+            {
+                if (_assertFailedCount == value) return;
+                _assertFailedCount = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(AssertionSummaryLabel));
+                OnPropertyChanged(nameof(HasAssertionSummary));
+                OnPropertyChanged(nameof(AssertionSeverity));
+            }
+        }
+
+        public int ExpectFailedCount
+        {
+            get => _expectFailedCount;
+            set
+            {
+                if (_expectFailedCount == value) return;
+                _expectFailedCount = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(AssertionSummaryLabel));
+                OnPropertyChanged(nameof(HasAssertionSummary));
+                OnPropertyChanged(nameof(AssertionSeverity));
+            }
+        }
+
+        public int AssertionPassedCount
+        {
+            get => _assertPassedCount;
+            set
+            {
+                if (_assertPassedCount == value) return;
+                _assertPassedCount = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(AssertionSummaryLabel));
+                OnPropertyChanged(nameof(HasAssertionSummary));
+                OnPropertyChanged(nameof(AssertionSeverity));
+            }
+        }
+
         public PlanNode? Parent { get; set; }
         public ObservableCollection<PlanNode> Children { get; } = new ObservableCollection<PlanNode>();
         public ObservableCollection<NodeSetting> Settings { get; } = new ObservableCollection<NodeSetting>();
         public ObservableCollection<NodeSetting> Variables { get; } = new ObservableCollection<NodeSetting>();
         public ObservableCollection<VariableExtractionRule> Extractors { get; } = new ObservableCollection<VariableExtractionRule>();
+        public ObservableCollection<AssertionRule> Assertions { get; } = new ObservableCollection<AssertionRule>();
 
         public string DisplayName => $"{Type}: {Name}";
+        public bool HasAssertionSummary => AssertFailedCount + ExpectFailedCount + AssertionPassedCount > 0;
+        public string AssertionSummaryLabel => $"A:{AssertFailedCount} E:{ExpectFailedCount} P:{AssertionPassedCount}";
+        public string AssertionSeverity
+        {
+            get
+            {
+                if (AssertFailedCount > 0)
+                {
+                    return "AssertFailed";
+                }
+
+                if (ExpectFailedCount > 0)
+                {
+                    return "ExpectFailed";
+                }
+
+                if (AssertionPassedCount > 0)
+                {
+                    return "Passed";
+                }
+
+                return "None";
+            }
+        }
 
         public PlanNode(string type, string name, string? id = null)
         {

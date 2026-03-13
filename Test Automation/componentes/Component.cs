@@ -16,6 +16,7 @@ namespace Test_Automation.Componentes
         public List<Component> Children { get; set; } = new List<Component>();
         public Dictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
         public List<VariableExtractionRule> Extractors { get; set; } = new List<VariableExtractionRule>();
+        public List<AssertionRule> Assertions { get; set; } = new List<AssertionRule>();
 
         protected Component()
         {

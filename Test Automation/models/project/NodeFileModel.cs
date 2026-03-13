@@ -11,6 +11,7 @@ namespace Test_Automation.Models.ProjectFiles
         public Dictionary<string, string> Settings { get; set; } = new Dictionary<string, string>();
         public Dictionary<string, string> Variables { get; set; } = new Dictionary<string, string>();
         public List<VariableExtractionFileModel> Extractors { get; set; } = new List<VariableExtractionFileModel>();
+        public List<AssertionFileModel> Assertions { get; set; } = new List<AssertionFileModel>();
         public List<NodeFileModel> Children { get; set; } = new List<NodeFileModel>();
     }
 }

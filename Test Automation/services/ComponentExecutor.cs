@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -18,6 +19,12 @@ namespace Test_Automation.Services
 
         public event Action<ExecutionResult>? ComponentStarted;
         public event Action<ExecutionResult>? ComponentCompleted;
+        public event Action<string>? Trace;
+
+        private void TraceLog(string message)
+        {
+            Trace?.Invoke(message);
+        }
 
         public async Task<ExecutionResult> ExecuteComponent(Component component, Test_Automation.Models.ExecutionContext context)
         {
@@ -33,39 +40,66 @@ namespace Test_Automation.Services
                 ThreadGroupId = CurrentThreadGroupId.Value ?? string.Empty
             };
 
+            TraceLog($"ExecuteComponent start: {component.Name} ({component.GetType().Name}) id={component.Id}");
             ComponentStarted?.Invoke(result);
 
             try
             {
                 if (component.Settings != null && component.Settings.Count > 0)
                 {
+                    TraceLog($"Resolving settings for {component.Name}: {component.Settings.Count} entries.");
                     component.Settings = ResolveSettings(component.Settings, context);
                 }
 
                 // Execute the component
                 var componentData = await component.Execute(context);
+                TraceLog($"Execute() completed for {component.Name}. Data type: {componentData?.GetType().Name ?? "<null>"}.");
                 result.Data = componentData;
-                ApplyVariableExtractors(component, context, componentData);
-                result.MarkAsCompleted(true);
+                ApplyVariableExtractors(component, context, componentData, TraceLog);
+                var assertionResults = EvaluateAssertions(component, componentData, TraceLog);
+                result.AssertionResults = assertionResults;
+                result.AssertFailedCount = assertionResults.Count(item => !item.Passed && IsAssertMode(item.Mode));
+                result.ExpectFailedCount = assertionResults.Count(item => !item.Passed && !IsAssertMode(item.Mode));
+                result.AssertPassedCount = assertionResults.Count(item => item.Passed);
+
+                TraceLog($"Assertions for {component.Name}: passed={result.AssertPassedCount}, assertFailed={result.AssertFailedCount}, expectFailed={result.ExpectFailedCount}.");
+
+                if (result.AssertFailedCount > 0)
+                {
+                    result.Error = string.Join(" | ", assertionResults
+                        .Where(item => !item.Passed && IsAssertMode(item.Mode))
+                        .Select(item => item.Message));
+                    result.MarkAsCompleted(false);
+                    TraceLog($"ExecuteComponent failed (assert): {component.Name}. Error={result.Error}");
+                }
+                else
+                {
+                    result.MarkAsCompleted(true);
+                    TraceLog($"ExecuteComponent passed: {component.Name}.");
+                }
+
                 result.Output = componentData?.ToString();
             }
             catch (Exception ex)
             {
                 result.Error = ex.Message;
                 result.MarkAsCompleted(false);
+                TraceLog($"ExecuteComponent exception: {component.Name}. {ex.Message}");
             }
             finally
             {
                 ComponentCompleted?.Invoke(result);
+                TraceLog($"ExecuteComponent end: {component.Name}. status={result.Status}, durationMs={result.DurationMs}");
             }
 
             return result;
         }
 
-        private static void ApplyVariableExtractors(Component component, Test_Automation.Models.ExecutionContext context, ComponentData? componentData)
+        private static void ApplyVariableExtractors(Component component, Test_Automation.Models.ExecutionContext context, ComponentData? componentData, Action<string>? trace)
         {
             if (component.Extractors == null || component.Extractors.Count == 0)
             {
+                trace?.Invoke($"No extractors configured for {component.Name}.");
                 return;
             }
 
@@ -73,18 +107,22 @@ namespace Test_Automation.Services
             {
                 if (string.IsNullOrWhiteSpace(extractor.VariableName) || string.IsNullOrWhiteSpace(extractor.Source))
                 {
+                    trace?.Invoke($"Extractor skipped for {component.Name}: variable/source missing.");
                     continue;
                 }
 
-                var sourceValue = ResolveSourceValue(component, componentData, extractor.Source);
+                trace?.Invoke($"Extractor start: variable='{extractor.VariableName}', source='{extractor.Source}', path='{extractor.JsonPath}'.");
+                var sourceValue = ResolveSourceValue(component, componentData, extractor.Source, trace);
                 if (string.IsNullOrEmpty(sourceValue))
                 {
+                    trace?.Invoke($"Extractor source missing: {extractor.Source}.");
                     continue;
                 }
 
                 if (string.IsNullOrWhiteSpace(extractor.JsonPath))
                 {
                     context.SetVariable(extractor.VariableName, sourceValue);
+                    trace?.Invoke($"Extractor set variable '{extractor.VariableName}' from source value (no path).");
                     continue;
                 }
 
@@ -93,17 +131,23 @@ namespace Test_Automation.Services
                     || string.Equals(jsonPath, "$.", StringComparison.OrdinalIgnoreCase))
                 {
                     context.SetVariable(extractor.VariableName, sourceValue);
+                    trace?.Invoke($"Extractor set variable '{extractor.VariableName}' using root path.");
                     continue;
                 }
 
-                if (TryExtractJsonPath(sourceValue, extractor.JsonPath, out var extracted))
+                if (TryExtractJsonPath(sourceValue, extractor.JsonPath, out var extracted, trace))
                 {
                     context.SetVariable(extractor.VariableName, extracted);
+                    trace?.Invoke($"Extractor set variable '{extractor.VariableName}' to '{extracted}'.");
+                }
+                else
+                {
+                    trace?.Invoke($"Extractor path not found: {extractor.JsonPath}");
                 }
             }
         }
 
-        private static string? ResolveSourceValue(Component component, ComponentData? componentData, string source)
+        private static string? ResolveSourceValue(Component component, ComponentData? componentData, string source, Action<string>? trace = null)
         {
             if (string.IsNullOrWhiteSpace(source))
             {
@@ -112,11 +156,13 @@ namespace Test_Automation.Services
 
             if (string.Equals(source, "PreviewResponse", StringComparison.OrdinalIgnoreCase))
             {
+                trace?.Invoke("ResolveSourceValue using PreviewResponse payload.");
                 return BuildPreviewResponse(componentData);
             }
 
             if (component.Settings != null && component.Settings.TryGetValue(source, out var settingValue))
             {
+                trace?.Invoke($"ResolveSourceValue matched setting '{source}'.");
                 return settingValue;
             }
 
@@ -127,6 +173,7 @@ namespace Test_Automation.Services
 
             if (string.Equals(source, "ComponentData", StringComparison.OrdinalIgnoreCase))
             {
+                trace?.Invoke("ResolveSourceValue using serialized ComponentData.");
                 return JsonSerializer.Serialize(componentData);
             }
 
@@ -135,13 +182,182 @@ namespace Test_Automation.Services
                 var path = source.Substring("ComponentData.".Length);
                 var jsonPath = path.StartsWith("$") ? path : "$." + path;
                 var json = JsonSerializer.Serialize(componentData);
-                if (TryExtractJsonPath(json, jsonPath, out var extracted))
+                if (TryExtractJsonPath(json, jsonPath, out var extracted, trace))
                 {
+                    trace?.Invoke($"ResolveSourceValue extracted ComponentData path '{jsonPath}'.");
                     return extracted;
                 }
             }
 
+            trace?.Invoke($"ResolveSourceValue failed for source '{source}'.");
+
             return null;
+        }
+
+        private static List<AssertionEvaluationResult> EvaluateAssertions(Component component, ComponentData? componentData, Action<string>? trace)
+        {
+            var evaluations = new List<AssertionEvaluationResult>();
+            if (component.Assertions == null || component.Assertions.Count == 0)
+            {
+                trace?.Invoke($"No assertions configured for {component.Name}.");
+                return evaluations;
+            }
+
+            for (var index = 0; index < component.Assertions.Count; index++)
+            {
+                var assertion = component.Assertions[index];
+                var mode = NormalizeAssertionMode(assertion.Mode);
+                var evaluation = new AssertionEvaluationResult
+                {
+                    Index = index,
+                    Mode = mode,
+                    Source = assertion.Source,
+                    JsonPath = assertion.JsonPath,
+                    Condition = assertion.Condition,
+                    Expected = assertion.Expected
+                };
+
+                if (string.IsNullOrWhiteSpace(assertion.Source))
+                {
+                    evaluation.Passed = false;
+                    evaluation.Message = $"{mode} failed: source is required.";
+                    trace?.Invoke($"Assertion[{index}] {evaluation.Message}");
+                    evaluations.Add(evaluation);
+                    continue;
+                }
+
+                trace?.Invoke($"Assertion[{index}] evaluating: mode={mode}, source={assertion.Source}, path={assertion.JsonPath}, condition={assertion.Condition}, expected={assertion.Expected}");
+                var sourceValue = ResolveSourceValue(component, componentData, assertion.Source, trace);
+                if (string.IsNullOrEmpty(sourceValue))
+                {
+                    evaluation.Passed = false;
+                    evaluation.Message = $"{mode} failed: source missing '{assertion.Source}'.";
+                    trace?.Invoke($"Assertion[{index}] {evaluation.Message}");
+                    evaluations.Add(evaluation);
+                    continue;
+                }
+
+                var actual = sourceValue;
+                if (!string.IsNullOrWhiteSpace(assertion.JsonPath)
+                    && !string.Equals(assertion.JsonPath.Trim(), "$", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(assertion.JsonPath.Trim(), "$.", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!TryExtractJsonPath(sourceValue, assertion.JsonPath, out var extracted, trace))
+                    {
+                        evaluation.Passed = false;
+                        evaluation.Actual = sourceValue;
+                        evaluation.Message = $"{mode} failed: path not found '{assertion.JsonPath}'.";
+                        trace?.Invoke($"Assertion[{index}] {evaluation.Message}");
+                        evaluations.Add(evaluation);
+                        continue;
+                    }
+
+                    actual = extracted;
+                }
+
+                evaluation.Actual = actual;
+
+                evaluation.Passed = EvaluateCondition(actual, assertion.Expected, assertion.Condition);
+                if (evaluation.Passed)
+                {
+                    evaluation.Message = $"{mode} passed.";
+                }
+                else
+                {
+                    evaluation.Message = $"{mode} failed ({assertion.Condition}): actual='{actual}' expected='{assertion.Expected}'";
+                }
+
+                trace?.Invoke($"Assertion[{index}] {evaluation.Message}");
+
+                evaluations.Add(evaluation);
+            }
+
+            return evaluations;
+        }
+
+        private static string NormalizeAssertionMode(string mode)
+        {
+            return string.Equals(mode, "Expect", StringComparison.OrdinalIgnoreCase) ? "Expect" : "Assert";
+        }
+
+        private static bool IsAssertMode(string mode)
+        {
+            return !string.Equals(mode, "Expect", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool EvaluateCondition(string actual, string expected, string condition)
+        {
+            var op = string.IsNullOrWhiteSpace(condition) ? "Equals" : condition;
+            var normalizedActual = NormalizeComparisonValue(actual);
+            var normalizedExpected = NormalizeComparisonValue(expected);
+
+            switch (op)
+            {
+                case "Equals":
+                    return string.Equals(normalizedActual, normalizedExpected, StringComparison.OrdinalIgnoreCase);
+                case "NotEquals":
+                    return !string.Equals(normalizedActual, normalizedExpected, StringComparison.OrdinalIgnoreCase);
+                case "Contains":
+                    return normalizedActual.IndexOf(normalizedExpected, StringComparison.OrdinalIgnoreCase) >= 0;
+                case "NotContains":
+                    return normalizedActual.IndexOf(normalizedExpected, StringComparison.OrdinalIgnoreCase) < 0;
+                case "StartsWith":
+                    return normalizedActual.StartsWith(normalizedExpected, StringComparison.OrdinalIgnoreCase);
+                case "EndsWith":
+                    return normalizedActual.EndsWith(normalizedExpected, StringComparison.OrdinalIgnoreCase);
+                case "IsEmpty":
+                    return string.IsNullOrWhiteSpace(normalizedActual);
+                case "IsNotEmpty":
+                    return !string.IsNullOrWhiteSpace(normalizedActual);
+                case "Regex":
+                    try
+                    {
+                        return System.Text.RegularExpressions.Regex.IsMatch(normalizedActual, normalizedExpected, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                case "GreaterThan":
+                    return CompareNumbers(normalizedActual, normalizedExpected, (a, b) => a > b);
+                case "GreaterOrEqual":
+                    return CompareNumbers(normalizedActual, normalizedExpected, (a, b) => a >= b);
+                case "LessThan":
+                    return CompareNumbers(normalizedActual, normalizedExpected, (a, b) => a < b);
+                case "LessOrEqual":
+                    return CompareNumbers(normalizedActual, normalizedExpected, (a, b) => a <= b);
+                default:
+                    return string.Equals(normalizedActual, normalizedExpected, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        private static string NormalizeComparisonValue(string? value)
+        {
+            var trimmed = (value ?? string.Empty).Trim();
+            if (trimmed.Length >= 2
+                && ((trimmed.StartsWith("\"") && trimmed.EndsWith("\""))
+                    || (trimmed.StartsWith("'") && trimmed.EndsWith("'"))))
+            {
+                trimmed = trimmed.Substring(1, trimmed.Length - 2);
+            }
+
+            return trimmed;
+        }
+
+        private static bool CompareNumbers(string actual, string expected, Func<double, double, bool> comparer)
+        {
+            if (!TryParseNumber(actual, out var actualNumber) || !TryParseNumber(expected, out var expectedNumber))
+            {
+                return false;
+            }
+
+            return comparer(actualNumber, expectedNumber);
+        }
+
+        private static bool TryParseNumber(string value, out double parsed)
+        {
+            return double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out parsed)
+                || double.TryParse(value, NumberStyles.Any, CultureInfo.CurrentCulture, out parsed);
         }
 
         private static string? BuildPreviewResponse(ComponentData? componentData)
@@ -153,21 +369,43 @@ namespace Test_Automation.Services
 
             if (componentData is HttpData httpData)
             {
+                var parsedBody = TryParseJson(httpData.ResponseBody);
                 return JsonSerializer.Serialize(new
                 {
                     status = httpData.ResponseStatus,
-                    body = TryParseJson(httpData.ResponseBody),
-                    headers = httpData.Headers
+                    body = parsedBody,
+                    headers = httpData.Headers,
+                    runs = new[]
+                    {
+                        new
+                        {
+                            threadIndex = CurrentThreadIndex.Value ?? 0,
+                            responseStatus = httpData.ResponseStatus,
+                            responseBody = parsedBody,
+                            headers = httpData.Headers
+                        }
+                    }
                 });
             }
 
             if (componentData is GraphQlData graphQlData)
             {
+                var parsedBody = TryParseJson(graphQlData.ResponseBody);
                 return JsonSerializer.Serialize(new
                 {
                     status = graphQlData.ResponseStatus,
-                    body = TryParseJson(graphQlData.ResponseBody),
-                    headers = graphQlData.Headers
+                    body = parsedBody,
+                    headers = graphQlData.Headers,
+                    runs = new[]
+                    {
+                        new
+                        {
+                            threadIndex = CurrentThreadIndex.Value ?? 0,
+                            responseStatus = graphQlData.ResponseStatus,
+                            responseBody = parsedBody,
+                            headers = graphQlData.Headers
+                        }
+                    }
                 });
             }
 
@@ -202,11 +440,12 @@ namespace Test_Automation.Services
             }
         }
 
-        private static bool TryExtractJsonPath(string json, string path, out string extracted)
+        private static bool TryExtractJsonPath(string json, string path, out string extracted, Action<string>? trace = null)
         {
             extracted = string.Empty;
             if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(path))
             {
+                trace?.Invoke($"TryExtractJsonPath skipped: json/path missing. path='{path}'.");
                 return false;
             }
 
@@ -225,10 +464,12 @@ namespace Test_Automation.Services
                 }
 
                 var segments = normalized.Split('.', StringSplitOptions.RemoveEmptyEntries);
+                trace?.Invoke($"TryExtractJsonPath start: path='{path}', normalized='{normalized}', segments={segments.Length}.");
                 foreach (var segment in segments)
                 {
                     if (!TryResolveSegment(ref element, segment))
                     {
+                        trace?.Invoke($"TryExtractJsonPath failed at segment '{segment}'.");
                         return false;
                     }
                 }
@@ -243,10 +484,12 @@ namespace Test_Automation.Services
                     _ => element.GetRawText()
                 };
 
+                trace?.Invoke($"TryExtractJsonPath success: path='{path}', extracted='{extracted}'.");
                 return true;
             }
             catch
             {
+                trace?.Invoke($"TryExtractJsonPath exception for path '{path}'.");
                 return false;
             }
         }
@@ -283,6 +526,12 @@ namespace Test_Automation.Services
                     return false;
                 }
 
+                if (element.ValueKind == JsonValueKind.String
+                    && TryParseJsonString(element.GetString(), out var parsedFromString))
+                {
+                    element = parsedFromString;
+                }
+
                 if (element.ValueKind != JsonValueKind.Array || index < 0 || index >= element.GetArrayLength())
                 {
                     return false;
@@ -297,6 +546,12 @@ namespace Test_Automation.Services
 
         private static bool TryResolvePropertyOrIndex(ref JsonElement element, string token)
         {
+            if (element.ValueKind == JsonValueKind.String
+                && TryParseJsonString(element.GetString(), out var parsedFromString))
+            {
+                element = parsedFromString;
+            }
+
             if (element.ValueKind == JsonValueKind.Array && int.TryParse(token, out var index))
             {
                 if (index < 0 || index >= element.GetArrayLength())
@@ -313,7 +568,7 @@ namespace Test_Automation.Services
                 return false;
             }
 
-            if (!element.TryGetProperty(token, out var next))
+            if (!TryGetPropertyIgnoreCase(element, token, out var next))
             {
                 return false;
             }
@@ -322,8 +577,56 @@ namespace Test_Automation.Services
             return true;
         }
 
+        private static bool TryGetPropertyIgnoreCase(JsonElement element, string token, out JsonElement next)
+        {
+            if (element.TryGetProperty(token, out next))
+            {
+                return true;
+            }
+
+            foreach (var property in element.EnumerateObject())
+            {
+                if (string.Equals(property.Name, token, StringComparison.OrdinalIgnoreCase))
+                {
+                    next = property.Value;
+                    return true;
+                }
+            }
+
+            next = default;
+            return false;
+        }
+
+        private static bool TryParseJsonString(string? text, out JsonElement parsedElement)
+        {
+            parsedElement = default;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            var trimmed = text.Trim();
+            if (!(trimmed.StartsWith("{") && trimmed.EndsWith("}"))
+                && !(trimmed.StartsWith("[") && trimmed.EndsWith("]")))
+            {
+                return false;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                parsedElement = doc.RootElement.Clone();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public async Task<ExecutionResult> ExecuteComponentTree(Component component, Test_Automation.Models.ExecutionContext context)
         {
+            TraceLog($"ExecuteComponentTree enter: {component.Name} ({component.GetType().Name})");
             if (component is Threads threadsComponent)
             {
                 var threadCount = 1;
@@ -334,21 +637,25 @@ namespace Test_Automation.Services
                     threadCount = parsed;
                 }
 
+                TraceLog($"ExecuteComponentTree dispatch Threads: count={threadCount}");
                 return await ExecuteThreadGroup(threadsComponent, context, threadCount);
             }
 
             if (component is Loop loopComponent)
             {
+                TraceLog("ExecuteComponentTree dispatch Loop");
                 return await ExecuteLoop(loopComponent, context);
             }
 
             if (component is If ifComponent)
             {
+                TraceLog("ExecuteComponentTree dispatch If");
                 return await ExecuteIf(ifComponent, context);
             }
 
             if (component is Foreach foreachComponent)
             {
+                TraceLog("ExecuteComponentTree dispatch Foreach");
                 return await ExecuteForeach(foreachComponent, context);
             }
 
@@ -357,6 +664,7 @@ namespace Test_Automation.Services
             // If component has children, execute them sequentially
             if (component.Children.Count > 0)
             {
+                TraceLog($"ExecuteComponentTree children: {component.Children.Count} under {component.Name}.");
                 var childResults = new List<ExecutionResult>();
                 foreach (var child in component.Children)
                 {
@@ -368,6 +676,8 @@ namespace Test_Automation.Services
                     }
                 }
             }
+
+            TraceLog($"ExecuteComponentTree exit: {component.Name}, status={result.Status}.");
 
             return result;
         }
@@ -383,6 +693,8 @@ namespace Test_Automation.Services
             {
                 iterations = parsed;
             }
+
+            TraceLog($"ExecuteLoop iterations={iterations} for {loopComponent.Name}.");
 
             var previousIndex = context.GetVariable("LoopIndex");
             for (var i = 0; i < iterations; i++)
@@ -411,6 +723,7 @@ namespace Test_Automation.Services
             var result = await ExecuteComponent(ifComponent, context);
             var condition = ifComponent.Settings.TryGetValue("Condition", out var value) ? value : string.Empty;
             var conditionMet = EvaluateCondition(condition, context);
+            TraceLog($"ExecuteIf condition='{condition}', resolved={conditionMet} for {ifComponent.Name}.");
 
             if (result.Data is IfData ifData)
             {
@@ -444,9 +757,11 @@ namespace Test_Automation.Services
             var previousIndex = context.GetVariable("CurrentIndex");
 
             var collection = ResolveCollection(context, sourceVariable);
+            TraceLog($"ExecuteForeach source='{sourceVariable}' for {foreachComponent.Name}.");
             var index = 0;
             foreach (var item in collection)
             {
+                TraceLog($"ExecuteForeach iteration index={index}, itemType={item?.GetType().Name ?? "<null>"}.");
                 context.SetVariable("CurrentItem", item);
                 context.SetVariable("CurrentIndex", index);
                 foreach (var child in foreachComponent.Children)
@@ -618,6 +933,7 @@ namespace Test_Automation.Services
 
         public async Task<ExecutionResult> ExecuteThreadGroup(Threads threadComponent, Test_Automation.Models.ExecutionContext context, int threadCount = 1)
         {
+            TraceLog($"ExecuteThreadGroup start: {threadComponent.Name}, threadCount={threadCount}.");
             var result = new ExecutionResult
             {
                 ComponentId = threadComponent.Id,
@@ -642,11 +958,13 @@ namespace Test_Automation.Services
                 }
 
                 result.MarkAsCompleted(true);
+                TraceLog($"ExecuteThreadGroup completed: {threadComponent.Name}.");
             }
             catch (Exception ex)
             {
                 result.Error = ex.Message;
                 result.MarkAsCompleted(false);
+                TraceLog($"ExecuteThreadGroup exception: {ex.Message}");
             }
 
             return result;
@@ -656,6 +974,7 @@ namespace Test_Automation.Services
         {
             CurrentThreadIndex.Value = threadIndex;
             CurrentThreadGroupId.Value = threadComponent.Id;
+            TraceLog($"ExecuteThreadChildren start: group={threadComponent.Name}, threadIndex={threadIndex}.");
 
             foreach (var child in threadComponent.Children)
             {
@@ -665,6 +984,8 @@ namespace Test_Automation.Services
                     context.Results.Add(childResult);
                 }
             }
+
+            TraceLog($"ExecuteThreadChildren end: group={threadComponent.Name}, threadIndex={threadIndex}.");
         }
     }
 }

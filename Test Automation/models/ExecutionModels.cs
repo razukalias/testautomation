@@ -49,6 +49,36 @@ namespace Test_Automation.Models
     /// <summary>
     /// Execution result for individual component
     /// </summary>
+    public class AssertionEvaluationResult
+    {
+        [JsonPropertyName("index")]
+        public int Index { get; set; }
+
+        [JsonPropertyName("mode")]
+        public string Mode { get; set; } = "Assert";
+
+        [JsonPropertyName("source")]
+        public string Source { get; set; } = string.Empty;
+
+        [JsonPropertyName("jsonPath")]
+        public string JsonPath { get; set; } = string.Empty;
+
+        [JsonPropertyName("condition")]
+        public string Condition { get; set; } = string.Empty;
+
+        [JsonPropertyName("expected")]
+        public string Expected { get; set; } = string.Empty;
+
+        [JsonPropertyName("actual")]
+        public string Actual { get; set; } = string.Empty;
+
+        [JsonPropertyName("passed")]
+        public bool Passed { get; set; }
+
+        [JsonPropertyName("message")]
+        public string Message { get; set; } = string.Empty;
+    }
+
     public class ExecutionResult
     {
         [JsonPropertyName("componentId")]
@@ -86,6 +116,18 @@ namespace Test_Automation.Models
 
         [JsonPropertyName("threadGroupId")]
         public string ThreadGroupId { get; set; } = string.Empty;
+
+        [JsonPropertyName("assertions")]
+        public List<AssertionEvaluationResult> AssertionResults { get; set; } = new List<AssertionEvaluationResult>();
+
+        [JsonPropertyName("assertFailedCount")]
+        public int AssertFailedCount { get; set; }
+
+        [JsonPropertyName("expectFailedCount")]
+        public int ExpectFailedCount { get; set; }
+
+        [JsonPropertyName("assertPassedCount")]
+        public int AssertPassedCount { get; set; }
 
         public void MarkAsCompleted(bool success = true)
         {

@@ -39,7 +39,37 @@ namespace Test_Automation
             "OAuth2"
         };
 
+        public ObservableCollection<string> AssertionConditionOptions { get; } = new ObservableCollection<string>
+        {
+            "Equals",
+            "NotEquals",
+            "Contains",
+            "NotContains",
+            "StartsWith",
+            "EndsWith",
+            "GreaterThan",
+            "GreaterOrEqual",
+            "LessThan",
+            "LessOrEqual",
+            "IsEmpty",
+            "IsNotEmpty",
+            "Regex"
+        };
+
+        public ObservableCollection<string> AssertionModeOptions { get; } = new ObservableCollection<string>
+        {
+            "Assert",
+            "Expect"
+        };
+
         public ObservableCollection<string> EnvironmentOptions { get; } = new ObservableCollection<string>();
+
+        public ObservableCollection<string> TraceLevelOptions { get; } = new ObservableCollection<string>
+        {
+            "Off",
+            "Errors",
+            "Verbose"
+        };
 
         public ObservableCollection<string> HttpMethodOptions { get; } = new ObservableCollection<string>
         {
@@ -54,6 +84,7 @@ namespace Test_Automation
 
         private PlanNode? _selectedNode;
         private string _selectedEnvironment = string.Empty;
+        private string _selectedTraceLevel = "Verbose";
         private bool _isSyncingEnvironment;
         private bool _isRefreshingEnvironmentOptions;
         private bool _isNormalizingVariables;
@@ -71,6 +102,7 @@ namespace Test_Automation
         private string _httpResponseMetadataPreview = "Select an HTTP component to see response metadata.";
         private string _previewLogs = "Logs will appear here.";
         private string _variablesPreview = "{}";
+        private string _runtimeTraceLogBuffer = string.Empty;
         private Test_Automation.Models.ExecutionContext? _lastExecutionContext;
 
         public PlanNode? SelectedNode
@@ -279,6 +311,22 @@ namespace Test_Automation
                     UpdateProjectVariablesPreview();
                     RefreshJsonPreview();
                 }
+            }
+        }
+
+        public string SelectedTraceLevel
+        {
+            get => _selectedTraceLevel;
+            set
+            {
+                var normalized = TraceLevelOptions.Contains(value) ? value : "Verbose";
+                if (string.Equals(_selectedTraceLevel, normalized, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _selectedTraceLevel = normalized;
+                OnPropertyChanged();
             }
         }
 
@@ -787,9 +835,12 @@ namespace Test_Automation
                 return;
             }
 
+            ResetAssertionStateForSubtree(testPlanNode);
+
             var executor = CreateExecutorWithHighlight();
             var runner = new TestPlanRunner(executor);
             var startTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            _runtimeTraceLogBuffer = string.Empty;
             PreviewLogs = $"[{startTimestamp}] Running TestPlan: {testPlanNode.Name}";
             VariablesPreview = "{}";
 
@@ -813,6 +864,7 @@ namespace Test_Automation
                 });
 
                 RefreshComponentPreview();
+                AppendRuntimeTraceBufferToPreviewLogs();
             }
             catch (Exception ex)
             {
@@ -822,6 +874,7 @@ namespace Test_Automation
                     PreviewLogs,
                     $"[{endTimestamp}] Run failed: {ex.Message}"
                 });
+                AppendRuntimeTraceBufferToPreviewLogs();
                 VariablesPreview = "{}";
             }
         }
@@ -921,8 +974,11 @@ namespace Test_Automation
                 return;
             }
 
+            ResetAssertionStateForSubtree(selectedNode);
+
             var executor = CreateExecutorWithHighlight();
             var startTimestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            _runtimeTraceLogBuffer = string.Empty;
             PreviewLogs = $"[{startTimestamp}] Running: {selectedNode.Name}";
             VariablesPreview = "{}";
 
@@ -948,6 +1004,7 @@ namespace Test_Automation
                 });
 
                 RefreshComponentPreview();
+                AppendRuntimeTraceBufferToPreviewLogs();
             }
             catch (Exception ex)
             {
@@ -957,6 +1014,7 @@ namespace Test_Automation
                     PreviewLogs,
                     $"[{endTimestamp}] Run failed: {ex.Message}"
                 });
+                AppendRuntimeTraceBufferToPreviewLogs();
                 VariablesPreview = "{}";
             }
         }
@@ -1132,8 +1190,156 @@ namespace Test_Automation
         {
             var executor = new ComponentExecutor();
             executor.ComponentStarted += result => _ = SetNodeHighlightAsync(result.ComponentId, true);
-            executor.ComponentCompleted += result => _ = SetNodeHighlightAsync(result.ComponentId, false);
+            executor.ComponentCompleted += result => _ = HandleComponentCompletedAsync(result);
+            executor.Trace += message => _ = AppendRuntimeLogAsync(message);
             return executor;
+        }
+
+        private async Task AppendRuntimeLogAsync(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            if (string.Equals(SelectedTraceLevel, "Off", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (string.Equals(SelectedTraceLevel, "Errors", StringComparison.OrdinalIgnoreCase)
+                && !IsErrorTraceMessage(message))
+            {
+                return;
+            }
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                var line = $"[{now}] {message}";
+                _runtimeTraceLogBuffer = string.IsNullOrWhiteSpace(_runtimeTraceLogBuffer)
+                    ? line
+                    : string.Join("\n", new[] { _runtimeTraceLogBuffer, line });
+                if (string.IsNullOrWhiteSpace(PreviewLogs) || string.Equals(PreviewLogs, "Logs will appear here.", StringComparison.Ordinal))
+                {
+                    PreviewLogs = line;
+                    return;
+                }
+
+                PreviewLogs = string.Join("\n", new[] { PreviewLogs, line });
+            });
+        }
+
+        private static bool IsErrorTraceMessage(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return false;
+            }
+
+            return message.Contains("failed", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("exception", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("error", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("not found", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("missing", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void AppendRuntimeTraceBufferToPreviewLogs()
+        {
+            if (string.IsNullOrWhiteSpace(_runtimeTraceLogBuffer))
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(PreviewLogs) || string.Equals(PreviewLogs, "Logs will appear here.", StringComparison.Ordinal))
+            {
+                PreviewLogs = _runtimeTraceLogBuffer;
+                return;
+            }
+
+            if (!PreviewLogs.Contains(_runtimeTraceLogBuffer, StringComparison.Ordinal))
+            {
+                PreviewLogs = string.Join("\n", new[] { PreviewLogs, _runtimeTraceLogBuffer });
+            }
+        }
+
+        private async Task HandleComponentCompletedAsync(ExecutionResult result)
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                var node = FindNodeById(result.ComponentId);
+                if (node == null)
+                {
+                    return;
+                }
+
+                node.IsHighlighted = false;
+                ApplyAssertionStatusesToNode(node, result);
+            });
+        }
+
+        private static void ApplyAssertionStatusesToNode(PlanNode node, ExecutionResult result)
+        {
+            foreach (var rule in node.Assertions)
+            {
+                rule.LastResultState = "NotRun";
+                rule.LastMessage = string.Empty;
+            }
+
+            node.AssertFailedCount = 0;
+            node.ExpectFailedCount = 0;
+            node.AssertionPassedCount = 0;
+
+            if (result.AssertionResults == null || result.AssertionResults.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var evaluation in result.AssertionResults)
+            {
+                if (evaluation.Index < 0 || evaluation.Index >= node.Assertions.Count)
+                {
+                    continue;
+                }
+
+                var rule = node.Assertions[evaluation.Index];
+                rule.LastMessage = evaluation.Message;
+
+                if (evaluation.Passed)
+                {
+                    rule.LastResultState = "Passed";
+                    node.AssertionPassedCount++;
+                    continue;
+                }
+
+                if (string.Equals(evaluation.Mode, "Expect", StringComparison.OrdinalIgnoreCase))
+                {
+                    rule.LastResultState = "ExpectFailed";
+                    node.ExpectFailedCount++;
+                }
+                else
+                {
+                    rule.LastResultState = "AssertFailed";
+                    node.AssertFailedCount++;
+                }
+            }
+        }
+
+        private static void ResetAssertionStateForSubtree(PlanNode node)
+        {
+            node.AssertFailedCount = 0;
+            node.ExpectFailedCount = 0;
+            node.AssertionPassedCount = 0;
+            foreach (var rule in node.Assertions)
+            {
+                rule.LastResultState = "NotRun";
+                rule.LastMessage = string.Empty;
+            }
+
+            foreach (var child in node.Children)
+            {
+                ResetAssertionStateForSubtree(child);
+            }
         }
 
         private async Task SetNodeHighlightAsync(string componentId, bool isHighlighted)
@@ -1217,6 +1423,12 @@ namespace Test_Automation
                 .ToList();
 
             component.Extractors = extractors;
+
+            var assertions = node.Assertions
+                .Select(rule => new AssertionRule(rule.Source, rule.JsonPath, rule.Condition, rule.Expected, rule.Mode))
+                .ToList();
+
+            component.Assertions = assertions;
 
             foreach (var child in node.Children)
             {
@@ -1718,6 +1930,7 @@ namespace Test_Automation
             node.Settings.CollectionChanged += NodeSettings_CollectionChanged;
             node.Variables.CollectionChanged += NodeVariables_CollectionChanged;
             node.Extractors.CollectionChanged += NodeExtractors_CollectionChanged;
+            node.Assertions.CollectionChanged += NodeAssertions_CollectionChanged;
 
             foreach (var setting in node.Settings)
             {
@@ -1733,6 +1946,11 @@ namespace Test_Automation
             {
                 extractor.PropertyChanged += NodeExtractor_PropertyChanged;
             }
+
+            foreach (var assertion in node.Assertions)
+            {
+                assertion.PropertyChanged += NodeAssertion_PropertyChanged;
+            }
         }
 
         private void UnregisterNode(PlanNode node)
@@ -1742,6 +1960,7 @@ namespace Test_Automation
             node.Settings.CollectionChanged -= NodeSettings_CollectionChanged;
             node.Variables.CollectionChanged -= NodeVariables_CollectionChanged;
             node.Extractors.CollectionChanged -= NodeExtractors_CollectionChanged;
+            node.Assertions.CollectionChanged -= NodeAssertions_CollectionChanged;
 
             foreach (var setting in node.Settings)
             {
@@ -1756,6 +1975,11 @@ namespace Test_Automation
             foreach (var extractor in node.Extractors)
             {
                 extractor.PropertyChanged -= NodeExtractor_PropertyChanged;
+            }
+
+            foreach (var assertion in node.Assertions)
+            {
+                assertion.PropertyChanged -= NodeAssertion_PropertyChanged;
             }
 
             foreach (var child in node.Children)
@@ -1890,6 +2114,27 @@ namespace Test_Automation
             RebuildVariableUsageMap();
         }
 
+        private void NodeAssertions_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems.OfType<AssertionRule>())
+                {
+                    item.PropertyChanged -= NodeAssertion_PropertyChanged;
+                }
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems.OfType<AssertionRule>())
+                {
+                    item.PropertyChanged += NodeAssertion_PropertyChanged;
+                }
+            }
+
+            RefreshJsonPreview();
+        }
+
         private void PlanNode_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             NotifySelectedNodeEditorProperties();
@@ -1972,6 +2217,28 @@ namespace Test_Automation
             NotifySelectedNodeEditorProperties();
             RefreshJsonPreview();
             RebuildVariableUsageMap();
+        }
+
+        private void NodeAssertion_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            NotifySelectedNodeEditorProperties();
+
+            var affectsPersistence = e.PropertyName == nameof(AssertionRule.Source)
+                || e.PropertyName == nameof(AssertionRule.JsonPath)
+                || e.PropertyName == nameof(AssertionRule.Mode)
+                || e.PropertyName == nameof(AssertionRule.Condition)
+                || e.PropertyName == nameof(AssertionRule.Expected);
+
+            if (affectsPersistence && sender is AssertionRule rule)
+            {
+                rule.LastResultState = "NotRun";
+                rule.LastMessage = "Rule changed. Run component to get fresh status.";
+            }
+
+            if (affectsPersistence)
+            {
+                RefreshJsonPreview();
+            }
         }
 
         private void RefreshJsonPreview()
@@ -2732,6 +2999,7 @@ namespace Test_Automation
         private void ClearLogsButton_Click(object sender, RoutedEventArgs e)
         {
             PreviewLogs = string.Empty;
+            _runtimeTraceLogBuffer = string.Empty;
         }
 
         private void ClearVariablesButton_Click(object sender, RoutedEventArgs e)
@@ -2919,7 +3187,7 @@ namespace Test_Automation
             }
         }
 
-        private static bool TryParseJsonString(string text, out JsonElement parsedElement)
+        private static bool TryParseJsonString(string? text, out JsonElement parsedElement)
         {
             parsedElement = default;
             if (string.IsNullOrWhiteSpace(text))
@@ -3027,6 +3295,12 @@ namespace Test_Automation
                     return false;
                 }
 
+                if (element.ValueKind == JsonValueKind.String
+                    && TryParseJsonString(element.GetString(), out var parsedFromString))
+                {
+                    element = parsedFromString;
+                }
+
                 if (element.ValueKind != JsonValueKind.Array || index < 0 || index >= element.GetArrayLength())
                 {
                     return false;
@@ -3041,6 +3315,12 @@ namespace Test_Automation
 
         private static bool TryResolvePropertyOrIndex(ref JsonElement element, string token)
         {
+            if (element.ValueKind == JsonValueKind.String
+                && TryParseJsonString(element.GetString(), out var parsedFromString))
+            {
+                element = parsedFromString;
+            }
+
             if (element.ValueKind == JsonValueKind.Array && int.TryParse(token, out var index))
             {
                 if (index < 0 || index >= element.GetArrayLength())
@@ -3057,13 +3337,33 @@ namespace Test_Automation
                 return false;
             }
 
-            if (!element.TryGetProperty(token, out var next))
+            if (!TryGetPropertyIgnoreCase(element, token, out var next))
             {
                 return false;
             }
 
             element = next;
             return true;
+        }
+
+        private static bool TryGetPropertyIgnoreCase(JsonElement element, string token, out JsonElement next)
+        {
+            if (element.TryGetProperty(token, out next))
+            {
+                return true;
+            }
+
+            foreach (var property in element.EnumerateObject())
+            {
+                if (string.Equals(property.Name, token, StringComparison.OrdinalIgnoreCase))
+                {
+                    next = property.Value;
+                    return true;
+                }
+            }
+
+            next = default;
+            return false;
         }
 
         private static object BuildNodeObject(PlanNode node)
@@ -3082,6 +3382,18 @@ namespace Test_Automation
                 })
                 .ToList();
 
+            var assertions = node.Assertions
+                .Where(assertion => !string.IsNullOrWhiteSpace(assertion.Source))
+                .Select(assertion => new
+                {
+                    mode = assertion.Mode,
+                    source = assertion.Source,
+                    jsonPath = assertion.JsonPath,
+                    condition = assertion.Condition,
+                    expected = assertion.Expected
+                })
+                .ToList();
+
             return new
             {
                 type = node.Type,
@@ -3090,6 +3402,7 @@ namespace Test_Automation
                 settings,
                 variables,
                 extractors,
+                assertions,
                 children = node.Children.Select(BuildNodeObject).ToList()
             };
         }
@@ -3111,6 +3424,17 @@ namespace Test_Automation
                         Source = extractor.Source,
                         JsonPath = extractor.JsonPath,
                         VariableName = extractor.VariableName
+                    })
+                    .ToList(),
+                Assertions = node.Assertions
+                    .Where(assertion => !string.IsNullOrWhiteSpace(assertion.Source))
+                    .Select(assertion => new AssertionFileModel
+                    {
+                        Mode = assertion.Mode,
+                        Source = assertion.Source,
+                        JsonPath = assertion.JsonPath,
+                        Condition = assertion.Condition,
+                        Expected = assertion.Expected
                     })
                     .ToList(),
                 Children = node.Children.Select(ToFileModel).ToList()
@@ -3144,6 +3468,15 @@ namespace Test_Automation
             foreach (var extractor in model.Extractors)
             {
                 node.Extractors.Add(new VariableExtractionRule(extractor.Source, extractor.JsonPath, extractor.VariableName));
+            }
+
+            node.Assertions.Clear();
+            if (model.Assertions != null)
+            {
+                foreach (var assertion in model.Assertions)
+                {
+                    node.Assertions.Add(new AssertionRule(assertion.Source, assertion.JsonPath, assertion.Condition, assertion.Expected, assertion.Mode));
+                }
             }
 
             foreach (var child in model.Children)
@@ -3628,12 +3961,27 @@ namespace Test_Automation
 
         private void ExploreJsonPathButton_Click(object sender, RoutedEventArgs e)
         {
-            if (SelectedNode == null || sender is not Button button || button.DataContext is not VariableExtractionRule extractor)
+            if (SelectedNode == null || sender is not Button button || button.DataContext == null)
             {
                 return;
             }
 
-            var sourceValue = ResolvePreviewSourceValue(extractor.Source);
+            var (source, currentPath, applyPath) = button.DataContext switch
+            {
+                VariableExtractionRule extractor =>
+                    (extractor.Source, extractor.JsonPath, new Action<string>(path => extractor.JsonPath = path)),
+                AssertionRule assertion =>
+                    (assertion.Source, assertion.JsonPath, new Action<string>(path => assertion.JsonPath = path)),
+                _ => (string.Empty, string.Empty, new Action<string>(_ => { }))
+            };
+
+            if (string.IsNullOrWhiteSpace(source))
+            {
+                MessageBox.Show("Select a source first.", "JSON Path Explorer", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var sourceValue = ResolvePreviewSourceValue(source);
             if (string.IsNullOrWhiteSpace(sourceValue))
             {
                 MessageBox.Show("Selected source is empty. Run or preview the component first.", "JSON Path Explorer", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -3646,13 +3994,36 @@ namespace Test_Automation
                 return;
             }
 
-            var selectedPath = ShowJsonPathPicker(rootElement, extractor.JsonPath);
+            var selectedPath = ShowJsonPathPicker(rootElement, currentPath);
             if (string.IsNullOrWhiteSpace(selectedPath))
             {
                 return;
             }
 
-            extractor.JsonPath = selectedPath;
+            applyPath(selectedPath);
+            RefreshJsonPreview();
+        }
+
+        private void AddAssertionButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || SelectedNode.Type == "Project")
+            {
+                return;
+            }
+
+            var defaultSource = ExtractorSourceOptions.FirstOrDefault() ?? "PreviewResponse";
+            SelectedNode.Assertions.Add(new AssertionRule(defaultSource, "$", "Equals", string.Empty, "Assert"));
+            RefreshJsonPreview();
+        }
+
+        private void RemoveAssertionButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || sender is not Button button || button.DataContext is not AssertionRule assertion)
+            {
+                return;
+            }
+
+            SelectedNode.Assertions.Remove(assertion);
             RefreshJsonPreview();
         }
 
