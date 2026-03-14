@@ -5366,6 +5366,7 @@ namespace Test_Automation
             }
 
             var allTags = EnumerateAssertionTreeTags(generationRoot)
+                .Where(tag => tag.IsLeaf)
                 .Where(tag => !string.Equals(tag.Path, "$", StringComparison.Ordinal))
                 .ToList();
 
