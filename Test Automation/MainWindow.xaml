@@ -1200,6 +1200,25 @@
                                      IsReadOnly="True" />
                         </Grid>
                     </TabItem>
+                    <TabItem Header="Assertions">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                                <Button Content="Clear" Width="80" Click="ClearAssertionsButton_Click" />
+                            </StackPanel>
+                            <TextBox Grid.Row="1"
+                                     Text="{Binding AssertionPreview}"
+                                     FontFamily="Consolas"
+                                     FontSize="13"
+                                     AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto"
+                                     IsReadOnly="True" />
+                        </Grid>
+                    </TabItem>
                 </TabControl>
             </Border>
         </Grid>

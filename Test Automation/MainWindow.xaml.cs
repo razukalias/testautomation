@@ -109,6 +109,7 @@ namespace Test_Automation
         private string _httpResponseMetadataPreview = "Select an HTTP component to see response metadata.";
         private string _previewLogs = "Logs will appear here.";
         private string _variablesPreview = "{}";
+        private string _assertionPreview = "Select a component to see assertion preview.";
         private string _runtimeTraceLogBuffer = string.Empty;
         private Test_Automation.Models.ExecutionContext? _lastExecutionContext;
         private Test_Automation.Models.ExecutionContext? _activeExecutionContext;
@@ -247,6 +248,17 @@ namespace Test_Automation
             {
                 if (_variablesPreview == value) return;
                 _variablesPreview = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string AssertionPreview
+        {
+            get => _assertionPreview;
+            set
+            {
+                if (_assertionPreview == value) return;
+                _assertionPreview = value;
                 OnPropertyChanged();
             }
         }
@@ -1078,7 +1090,22 @@ namespace Test_Automation
                     }
                 }
 
-                _lastExecutionContext = contexts.LastOrDefault();
+                var mergedExecutionContext = new Test_Automation.Models.ExecutionContext
+                {
+                    Status = status,
+                    IsRunning = false,
+                    Results = contexts
+                        .SelectMany(context => context.Results)
+                        .OrderBy(result => result.StartTime)
+                        .ToList()
+                };
+
+                foreach (var variable in mergedVariables)
+                {
+                    mergedExecutionContext.SetVariable(variable.Key, variable.Value);
+                }
+
+                _lastExecutionContext = mergedExecutionContext;
                 VariablesPreview = JsonSerializer.Serialize(mergedVariables, new JsonSerializerOptions
                 {
                     WriteIndented = true
@@ -2590,6 +2617,7 @@ namespace Test_Automation
                 PreviewRequest = "Select a component to see request preview.";
                 PreviewResponse = "Select a component to see response preview.";
                 PreviewLogs = "Logs will appear here.";
+                AssertionPreview = "Select a component to see assertion preview.";
                 ResetHttpDetailPreviews();
                 return;
             }
@@ -2603,6 +2631,21 @@ namespace Test_Automation
             {
                 ResetHttpDetailPreviews();
             }
+
+            if (string.Equals(nodeType, "Project", StringComparison.OrdinalIgnoreCase))
+            {
+                PopulateProjectPreview(now, nodeName);
+                return;
+            }
+
+            if (string.Equals(nodeType, "TestPlan", StringComparison.OrdinalIgnoreCase))
+            {
+                PopulateTestPlanPreview(now, nodeName);
+                return;
+            }
+
+            var scopedResults = GetExecutionResultsForScope(SelectedNode);
+            SetAssertionPreview(nodeType, nodeName, scopedResults);
 
             if (nodeType == "Http")
             {
@@ -3210,6 +3253,540 @@ namespace Test_Automation
             AppendExtractionPreview(now);
         }
 
+        private void PopulateTestPlanPreview(string timestamp, string nodeName)
+        {
+            if (SelectedNode == null)
+            {
+                return;
+            }
+
+            var testPlanNode = SelectedNode;
+            var componentIds = GetDescendantIds(testPlanNode)
+                .Append(testPlanNode.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var planResults = (_lastExecutionContext?.Results ?? new List<ExecutionResult>())
+                .Where(result => componentIds.Contains(result.ComponentId))
+                .OrderBy(result => result.StartTime)
+                .ToList();
+
+            SetAssertionPreview("TestPlan", nodeName, planResults);
+
+            var assertionSummary = BuildAssertionSummary(planResults);
+            var componentBreakdown = planResults
+                .GroupBy(result => new { result.ComponentId, result.ComponentName })
+                .Select(group =>
+                {
+                    var latest = group
+                        .OrderByDescending(result => result.EndTime ?? result.StartTime)
+                        .First();
+                    var componentAssertionSummary = BuildAssertionSummary(group);
+
+                    return new
+                    {
+                        componentId = group.Key.ComponentId,
+                        componentName = group.Key.ComponentName,
+                        componentType = FindNodeById(group.Key.ComponentId)?.Type ?? "Unknown",
+                        runs = group.Count(),
+                        latestStatus = latest.Status,
+                        latestDurationMs = latest.DurationMs,
+                        latestThreadIndex = latest.ThreadIndex,
+                        latestError = string.IsNullOrWhiteSpace(latest.Error) ? null : latest.Error,
+                        assertionSummary = new
+                        {
+                            assertFailed = componentAssertionSummary.AssertFailed,
+                            expectFailed = componentAssertionSummary.ExpectFailed,
+                            passed = componentAssertionSummary.Passed
+                        },
+                        assertionDetails = BuildAssertionDetails(group),
+                        latestData = latest.Data
+                    };
+                })
+                .OrderBy(component => component.componentName)
+                .ToList();
+
+            var requestRuns = planResults
+                .Select(result => new
+                {
+                    componentId = result.ComponentId,
+                    componentName = result.ComponentName,
+                    componentType = FindNodeById(result.ComponentId)?.Type ?? "Unknown",
+                    threadIndex = result.ThreadIndex,
+                    status = result.Status,
+                    durationMs = result.DurationMs,
+                    request = BuildComponentRequestSnapshot(result.Data)
+                })
+                .ToList();
+
+            var responseRuns = planResults
+                .Select(result => new
+                {
+                    componentId = result.ComponentId,
+                    componentName = result.ComponentName,
+                    componentType = FindNodeById(result.ComponentId)?.Type ?? "Unknown",
+                    threadIndex = result.ThreadIndex,
+                    status = result.Status,
+                    passed = result.Passed,
+                    durationMs = result.DurationMs,
+                    error = result.Error,
+                    response = BuildComponentResponseSnapshot(result.Data)
+                })
+                .ToList();
+
+            var planStatus = planResults.Count == 0
+                ? "not-run"
+                : (planResults.Any(result => string.Equals(result.Status, "failed", StringComparison.OrdinalIgnoreCase))
+                    ? "failed"
+                    : "passed");
+
+            var runtimeVariables = _lastExecutionContext?.Variables
+                .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase)
+                ?? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+            VariablesPreview = JsonSerializer.Serialize(new
+            {
+                scope = "TestPlan",
+                id = testPlanNode.Id,
+                name = testPlanNode.Name,
+                runtime = runtimeVariables
+            }, new JsonSerializerOptions { WriteIndented = true });
+
+            PreviewRequest = JsonSerializer.Serialize(new
+            {
+                component = nodeName,
+                type = "TestPlan",
+                id = testPlanNode.Id,
+                enabled = testPlanNode.IsEnabled,
+                plannedComponents = GetDescendantIds(testPlanNode).Count(),
+                executedComponents = componentBreakdown.Count,
+                runs = requestRuns,
+                structure = BuildPreviewNodeStructure(testPlanNode)
+            }, new JsonSerializerOptions { WriteIndented = true });
+
+            PreviewResponse = JsonSerializer.Serialize(new
+            {
+                status = planStatus,
+                summary = new
+                {
+                    executedComponents = componentBreakdown.Count,
+                    totalRuns = planResults.Count,
+                    passedRuns = planResults.Count(result => result.Passed),
+                    failedRuns = planResults.Count(result => !result.Passed),
+                    assertionSummary = new
+                    {
+                        assertFailed = assertionSummary.AssertFailed,
+                        expectFailed = assertionSummary.ExpectFailed,
+                        passed = assertionSummary.Passed
+                    },
+                    assertionDetails = BuildAssertionDetails(planResults)
+                },
+                runs = responseRuns,
+                components = componentBreakdown
+            }, new JsonSerializerOptions { WriteIndented = true });
+
+            if (planResults.Count == 0)
+            {
+                PreviewLogs = string.Join("\n", new[]
+                {
+                    $"[{timestamp}] TestPlan preview refreshed.",
+                    $"[{timestamp}] No component executions found for this TestPlan.",
+                    $"[{timestamp}] Run this TestPlan or use Project run to populate assertions/results."
+                });
+                return;
+            }
+
+            var logLines = new List<string>
+            {
+                $"[{timestamp}] TestPlan preview refreshed.",
+                $"[{timestamp}] Runs: {planResults.Count}, Components: {componentBreakdown.Count}, Passed: {planResults.Count(result => result.Passed)}, Failed: {planResults.Count(result => !result.Passed)}",
+                $"[{timestamp}] Assertions: passed={assertionSummary.Passed}, assertFailed={assertionSummary.AssertFailed}, expectFailed={assertionSummary.ExpectFailed}"
+            };
+
+            foreach (var component in componentBreakdown)
+            {
+                logLines.Add($"[{timestamp}] - {component.componentName} ({component.componentType}): status={component.latestStatus}, runs={component.runs}, assertFailed={component.assertionSummary.assertFailed}, expectFailed={component.assertionSummary.expectFailed}");
+            }
+
+            PreviewLogs = string.Join("\n", logLines);
+            AppendExtractionPreview(timestamp);
+        }
+
+        private void PopulateProjectPreview(string timestamp, string nodeName)
+        {
+            if (SelectedNode == null)
+            {
+                return;
+            }
+
+            var projectNode = SelectedNode;
+            var testPlanNodes = projectNode.Children
+                .Where(node => string.Equals(node.Type, "TestPlan", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var allResults = _lastExecutionContext?.Results ?? new List<ExecutionResult>();
+            var projectAssertionSummary = BuildAssertionSummary(allResults);
+            SetAssertionPreview("Project", nodeName, allResults);
+
+            var requestRuns = allResults
+                .Select(result => new
+                {
+                    componentId = result.ComponentId,
+                    componentName = result.ComponentName,
+                    componentType = FindNodeById(result.ComponentId)?.Type ?? "Unknown",
+                    threadIndex = result.ThreadIndex,
+                    status = result.Status,
+                    durationMs = result.DurationMs,
+                    request = BuildComponentRequestSnapshot(result.Data)
+                })
+                .ToList();
+
+            var responseRuns = allResults
+                .Select(result => new
+                {
+                    componentId = result.ComponentId,
+                    componentName = result.ComponentName,
+                    componentType = FindNodeById(result.ComponentId)?.Type ?? "Unknown",
+                    threadIndex = result.ThreadIndex,
+                    status = result.Status,
+                    passed = result.Passed,
+                    durationMs = result.DurationMs,
+                    error = result.Error,
+                    response = BuildComponentResponseSnapshot(result.Data)
+                })
+                .ToList();
+
+            var testPlanExecutions = testPlanNodes
+                .Select(testPlan =>
+                {
+                    var componentIds = GetDescendantIds(testPlan)
+                        .Append(testPlan.Id)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    var planResults = allResults
+                        .Where(result => componentIds.Contains(result.ComponentId))
+                        .OrderBy(result => result.StartTime)
+                        .ToList();
+
+                    var componentRuns = planResults
+                        .GroupBy(result => new { result.ComponentId, result.ComponentName })
+                        .Select(group =>
+                        {
+                            var latest = group
+                                .OrderByDescending(result => result.EndTime ?? result.StartTime)
+                                .First();
+                            var componentAssertionSummary = BuildAssertionSummary(group);
+
+                            return new
+                            {
+                                componentId = group.Key.ComponentId,
+                                componentName = group.Key.ComponentName,
+                                componentType = FindNodeById(group.Key.ComponentId)?.Type ?? "Unknown",
+                                runs = group.Count(),
+                                latestStatus = latest.Status,
+                                latestDurationMs = latest.DurationMs,
+                                latestThreadIndex = latest.ThreadIndex,
+                                latestError = string.IsNullOrWhiteSpace(latest.Error) ? null : latest.Error,
+                                assertionSummary = new
+                                {
+                                    assertFailed = componentAssertionSummary.AssertFailed,
+                                    expectFailed = componentAssertionSummary.ExpectFailed,
+                                    passed = componentAssertionSummary.Passed
+                                },
+                                assertionDetails = BuildAssertionDetails(group),
+                                latestData = latest.Data
+                            };
+                        })
+                        .OrderBy(component => component.componentName)
+                        .ToList();
+
+                    var planAssertionSummary = BuildAssertionSummary(planResults);
+                    var planStatus = planResults.Count == 0
+                        ? "not-run"
+                        : (planResults.Any(result => string.Equals(result.Status, "failed", StringComparison.OrdinalIgnoreCase))
+                            ? "failed"
+                            : "passed");
+
+                    return new
+                    {
+                        id = testPlan.Id,
+                        name = testPlan.Name,
+                        enabled = testPlan.IsEnabled,
+                        status = planStatus,
+                        plannedComponents = GetDescendantIds(testPlan).Count(),
+                        executedComponents = componentRuns.Count,
+                        totalRuns = planResults.Count,
+                        assertionSummary = new
+                        {
+                            assertFailed = planAssertionSummary.AssertFailed,
+                            expectFailed = planAssertionSummary.ExpectFailed,
+                            passed = planAssertionSummary.Passed
+                        },
+                        assertionDetails = BuildAssertionDetails(planResults),
+                        components = componentRuns
+                    };
+                })
+                .ToList();
+
+            var runtimeVariables = _lastExecutionContext?.Variables
+                .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase)
+                ?? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+            var projectVariables = BuildDictionaryWithOverwrite(projectNode.Variables)
+                .ToDictionary(entry => entry.Key, entry => (object)entry.Value, StringComparer.OrdinalIgnoreCase);
+
+            VariablesPreview = JsonSerializer.Serialize(new
+            {
+                project = projectVariables,
+                runtime = runtimeVariables
+            }, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+
+            PreviewRequest = JsonSerializer.Serialize(new
+            {
+                component = nodeName,
+                type = "Project",
+                environment = SelectedEnvironment,
+                runMode = SelectedProjectRunMode,
+                testPlanCount = testPlanNodes.Count,
+                plannedComponents = GetDescendantIds(projectNode).Count(),
+                executedComponents = allResults.Select(result => result.ComponentId).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                runs = requestRuns,
+                structure = testPlanNodes.Select(BuildPreviewNodeStructure).ToList()
+            }, new JsonSerializerOptions { WriteIndented = true });
+
+            PreviewResponse = JsonSerializer.Serialize(new
+            {
+                status = _lastExecutionContext?.Status ?? "not-run",
+                summary = new
+                {
+                    executedTestPlans = testPlanExecutions.Count(plan => !string.Equals(plan.status, "not-run", StringComparison.OrdinalIgnoreCase)),
+                    executedComponents = allResults.Select(result => result.ComponentId).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                    totalRuns = allResults.Count,
+                    passedRuns = allResults.Count(result => result.Passed),
+                    failedRuns = allResults.Count(result => !result.Passed),
+                    assertionSummary = new
+                    {
+                        assertFailed = projectAssertionSummary.AssertFailed,
+                        expectFailed = projectAssertionSummary.ExpectFailed,
+                        passed = projectAssertionSummary.Passed
+                    },
+                    assertionDetails = BuildAssertionDetails(allResults)
+                },
+                runs = responseRuns,
+                testPlans = testPlanExecutions
+            }, new JsonSerializerOptions { WriteIndented = true });
+
+            if (allResults.Count == 0)
+            {
+                PreviewLogs = string.Join("\n", new[]
+                {
+                    $"[{timestamp}] Project preview refreshed.",
+                    $"[{timestamp}] No component executions found yet.",
+                    $"[{timestamp}] Run using 'Run TestPlans' to see combined trace across all TestPlans."
+                });
+                return;
+            }
+
+            var logLines = new List<string>
+            {
+                $"[{timestamp}] Project preview refreshed.",
+                $"[{timestamp}] TestPlans: {testPlanNodes.Count}, Runs: {allResults.Count}, Passed: {allResults.Count(result => result.Passed)}, Failed: {allResults.Count(result => !result.Passed)}"
+            };
+
+            foreach (var plan in testPlanExecutions)
+            {
+                logLines.Add($"[{timestamp}] - {plan.name}: {plan.status}, runs={plan.totalRuns}, components={plan.executedComponents}, assertFailed={plan.assertionSummary.assertFailed}, expectFailed={plan.assertionSummary.expectFailed}");
+            }
+
+            PreviewLogs = string.Join("\n", logLines);
+            AppendExtractionPreview(timestamp);
+        }
+
+        private static (int AssertFailed, int ExpectFailed, int Passed) BuildAssertionSummary(IEnumerable<ExecutionResult> results)
+        {
+            var assertFailed = 0;
+            var expectFailed = 0;
+            var passed = 0;
+
+            foreach (var result in results)
+            {
+                if (result.AssertionResults == null)
+                {
+                    continue;
+                }
+
+                foreach (var assertion in result.AssertionResults)
+                {
+                    if (assertion.Passed)
+                    {
+                        passed++;
+                        continue;
+                    }
+
+                    if (string.Equals(assertion.Mode, "Expect", StringComparison.OrdinalIgnoreCase))
+                    {
+                        expectFailed++;
+                    }
+                    else
+                    {
+                        assertFailed++;
+                    }
+                }
+            }
+
+            return (assertFailed, expectFailed, passed);
+        }
+
+        private static List<object> BuildAssertionDetails(IEnumerable<ExecutionResult> results)
+        {
+            return results
+                .Where(result => result.AssertionResults != null && result.AssertionResults.Count > 0)
+                .SelectMany(result => result.AssertionResults.Select(assertion => (object)new
+                {
+                    componentId = result.ComponentId,
+                    componentName = result.ComponentName,
+                    threadIndex = result.ThreadIndex,
+                    componentStatus = result.Status,
+                    passed = assertion.Passed,
+                    mode = assertion.Mode,
+                    source = assertion.Source,
+                    jsonPath = assertion.JsonPath,
+                    condition = assertion.Condition,
+                    expected = assertion.Expected,
+                    actual = assertion.Actual,
+                    message = assertion.Message
+                }))
+                .ToList();
+        }
+
+        private void SetAssertionPreview(string scopeType, string scopeName, IEnumerable<ExecutionResult> results)
+        {
+            var materialized = results.ToList();
+            var summary = BuildAssertionSummary(materialized);
+            var details = BuildAssertionDetails(materialized);
+
+            AssertionPreview = JsonSerializer.Serialize(new
+            {
+                scope = new
+                {
+                    type = scopeType,
+                    name = scopeName
+                },
+                summary = new
+                {
+                    total = details.Count,
+                    passed = summary.Passed,
+                    assertFailed = summary.AssertFailed,
+                    expectFailed = summary.ExpectFailed
+                },
+                details
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+
+        private static object BuildComponentRequestSnapshot(object? data)
+        {
+            return data switch
+            {
+                HttpData http => new
+                {
+                    method = http.Method,
+                    url = http.Url,
+                    headers = http.Headers,
+                    body = http.Body
+                },
+                GraphQlData graphQl => new
+                {
+                    endpoint = graphQl.Endpoint,
+                    query = graphQl.Query,
+                    variables = graphQl.Variables,
+                    headers = graphQl.Headers
+                },
+                SqlData sql => new
+                {
+                    connectionString = sql.ConnectionString,
+                    query = sql.Query
+                },
+                ScriptData script => new
+                {
+                    language = script.ScriptLanguage,
+                    code = script.ScriptCode
+                },
+                AssertData assertion => new
+                {
+                    expected = assertion.ExpectedValue,
+                    actual = assertion.ActualValue,
+                    op = assertion.Operator
+                },
+                TimerData timer => new
+                {
+                    delayMs = timer.DelayMs
+                },
+                null => new
+                {
+                    message = "No request payload"
+                },
+                _ => data
+            };
+        }
+
+        private static object BuildComponentResponseSnapshot(object? data)
+        {
+            return data switch
+            {
+                HttpData http => new
+                {
+                    responseStatus = http.ResponseStatus,
+                    responseHeaders = http.ResponseHeaders,
+                    responseBody = http.ResponseBody
+                },
+                GraphQlData graphQl => new
+                {
+                    responseStatus = graphQl.ResponseStatus,
+                    responseBody = graphQl.ResponseBody
+                },
+                SqlData sql => new
+                {
+                    rows = sql.QueryResult,
+                    rowsCount = sql.QueryResult?.Count ?? 0
+                },
+                ScriptData script => new
+                {
+                    output = script.ExecutionResult
+                },
+                AssertData assertion => new
+                {
+                    passed = assertion.Passed,
+                    errorMessage = assertion.ErrorMessage,
+                    expected = assertion.ExpectedValue,
+                    actual = assertion.ActualValue
+                },
+                TimerData timer => new
+                {
+                    executed = timer.Executed,
+                    delayMs = timer.DelayMs
+                },
+                null => new
+                {
+                    message = "No response payload"
+                },
+                _ => data
+            };
+        }
+
+        private static object BuildPreviewNodeStructure(PlanNode node)
+        {
+            return new
+            {
+                id = node.Id,
+                name = node.Name,
+                type = node.Type,
+                enabled = node.IsEnabled,
+                children = node.Children.Select(BuildPreviewNodeStructure).ToList()
+            };
+        }
+
         private void AppendExtractionPreview(string timestamp)
         {
             if (SelectedNode == null || SelectedNode.Extractors.Count == 0)
@@ -3338,6 +3915,11 @@ namespace Test_Automation
             VariablesPreview = string.Empty;
         }
 
+        private void ClearAssertionsButton_Click(object sender, RoutedEventArgs e)
+        {
+            AssertionPreview = string.Empty;
+        }
+
         private void ClearChildrenPreviewButton_Click(object sender, RoutedEventArgs e)
         {
             if (SelectedNode == null || _lastExecutionContext == null)
@@ -3390,6 +3972,24 @@ namespace Test_Automation
 
             return _lastExecutionContext.Results
                 .Where(result => string.Equals(result.ComponentId, componentId, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(result => result.ThreadIndex)
+                .ThenBy(result => result.StartTime)
+                .ToList();
+        }
+
+        private List<ExecutionResult> GetExecutionResultsForScope(PlanNode node)
+        {
+            if (_lastExecutionContext == null)
+            {
+                return new List<ExecutionResult>();
+            }
+
+            var scopedIds = GetDescendantIds(node)
+                .Append(node.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return _lastExecutionContext.Results
+                .Where(result => scopedIds.Contains(result.ComponentId))
                 .OrderBy(result => result.ThreadIndex)
                 .ThenBy(result => result.StartTime)
                 .ToList();
