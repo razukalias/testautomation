@@ -15,7 +15,7 @@
             <RowDefinition x:Name="ScriptEditorLogRow" Height="220" MinHeight="120" />
         </Grid.RowDefinitions>
 
-        <TabControl>
+        <TabControl x:Name="EditorTabControl" SelectionChanged="EditorTabControl_SelectionChanged">
             <TabItem Header="Instructions &amp; Examples">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <TextBox x:Name="InstructionsTextBox"
@@ -124,7 +124,7 @@
         </TabControl>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="Run" Width="90" Margin="0,0,8,0" Click="RunButton_Click" />
+            <Button x:Name="RunButton" Content="Run" Width="90" Margin="0,0,8,0" Click="RunButton_Click" />
             <Button x:Name="ValidateButton" Content="Validate" Width="100" Margin="0,0,8,0" Click="ValidateButton_Click" />
             <Button Content="Save" Width="90" Margin="0,0,8,0" Click="SaveButton_Click" IsDefault="True" />
             <Button Content="Cancel" Width="90" Click="CancelButton_Click" IsCancel="True" />

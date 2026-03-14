@@ -5622,7 +5622,7 @@ namespace Test_Automation
             if (string.Equals(assertion.Condition, "Script", StringComparison.OrdinalIgnoreCase))
             {
                 var (language, scriptBody) = ParseAssertionScript(assertion.Expected);
-                var scriptEditor = new ScriptEditorWindow("Assertion Script Editor", language, scriptBody)
+                var scriptEditor = new ScriptEditorWindow("Assertion Script Editor", language, scriptBody, openScriptTabOnLoad: true)
                 {
                     Owner = this
                 };

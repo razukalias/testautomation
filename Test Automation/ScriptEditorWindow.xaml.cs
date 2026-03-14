@@ -12,6 +12,8 @@ namespace Test_Automation
 {
     public partial class ScriptEditorWindow : Window
     {
+        private readonly bool _openScriptTabOnLoad;
+
         private static readonly string ScriptEditorLayoutStatePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "TestAutomation",
@@ -26,9 +28,10 @@ namespace Test_Automation
         public string ScriptLanguage => LanguageTextBox.Text?.Trim() ?? "CSharp";
         public string ScriptText => ScriptTextBox.Text ?? string.Empty;
 
-        public ScriptEditorWindow(string title, string language, string script)
+        public ScriptEditorWindow(string title, string language, string script, bool openScriptTabOnLoad = false)
         {
             InitializeComponent();
+            _openScriptTabOnLoad = openScriptTabOnLoad;
             Title = string.IsNullOrWhiteSpace(title) ? "Script Editor" : title;
             LanguageTextBox.Text = string.IsNullOrWhiteSpace(language) ? "CSharp" : language;
             ScriptTextBox.Text = script ?? string.Empty;
@@ -40,9 +43,38 @@ namespace Test_Automation
                 UpdateColumnRuler();
                 UpdateLineNumbers();
                 UpdateCaretPosition();
-                ScriptTextBox.Focus();
+                if (_openScriptTabOnLoad)
+                {
+                    EditorTabControl.SelectedIndex = 1;
+                    ScriptTextBox.Focus();
+                }
+                else
+                {
+                    EditorTabControl.SelectedIndex = 0;
+                    InstructionsTextBox.Focus();
+                }
+
+                UpdateScriptTabUiState();
             };
             Closing += ScriptEditorWindow_Closing;
+        }
+
+        private void EditorTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateScriptTabUiState();
+        }
+
+        private void UpdateScriptTabUiState()
+        {
+            if (EditorTabControl == null)
+            {
+                return;
+            }
+
+            var isScriptTabSelected = EditorTabControl.SelectedIndex == 1;
+            var actionVisibility = isScriptTabSelected ? Visibility.Visible : Visibility.Collapsed;
+            RunButton.Visibility = actionVisibility;
+            ValidateButton.Visibility = actionVisibility;
         }
 
         private void ScriptEditorWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
