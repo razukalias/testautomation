@@ -1079,17 +1079,16 @@
                                                             <Style TargetType="TextBox">
                                                                 <Setter Property="AcceptsReturn" Value="False" />
                                                                 <Setter Property="TextWrapping" Value="NoWrap" />
+                                                                <Setter Property="Height" Value="24" />
                                                                 <Setter Property="MinHeight" Value="24" />
+                                                                <Setter Property="MaxHeight" Value="24" />
                                                                 <Setter Property="VerticalScrollBarVisibility" Value="Disabled" />
-                                                                <Setter Property="IsReadOnly" Value="False" />
+                                                                <Setter Property="HorizontalScrollBarVisibility" Value="Hidden" />
+                                                                <Setter Property="IsReadOnly" Value="True" />
+                                                                <Setter Property="Cursor" Value="Hand" />
+                                                                <Setter Property="ToolTip" Value="Click to open expected value editor" />
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding Condition}" Value="Script">
-                                                                        <Setter Property="AcceptsReturn" Value="True" />
-                                                                        <Setter Property="TextWrapping" Value="Wrap" />
-                                                                        <Setter Property="MinHeight" Value="90" />
-                                                                        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
-                                                                        <Setter Property="IsReadOnly" Value="True" />
-                                                                        <Setter Property="Cursor" Value="Hand" />
                                                                         <Setter Property="ToolTip" Value="Click to open script editor" />
                                                                     </DataTrigger>
                                                                 </Style.Triggers>

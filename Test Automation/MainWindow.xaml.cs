@@ -5619,23 +5619,102 @@ namespace Test_Automation
                 return;
             }
 
-            if (!string.Equals(assertion.Condition, "Script", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(assertion.Condition, "Script", StringComparison.OrdinalIgnoreCase))
             {
+                var (language, scriptBody) = ParseAssertionScript(assertion.Expected);
+                var scriptEditor = new ScriptEditorWindow("Assertion Script Editor", language, scriptBody)
+                {
+                    Owner = this
+                };
+
+                if (scriptEditor.ShowDialog() == true)
+                {
+                    assertion.Expected = BuildAssertionScript(scriptEditor.ScriptLanguage, scriptEditor.ScriptText);
+                    RefreshJsonPreview();
+                }
+
+                e.Handled = true;
                 return;
             }
 
-            var (language, scriptBody) = ParseAssertionScript(assertion.Expected);
-            var editor = new ScriptEditorWindow("Assertion Script Editor", language, scriptBody)
+            var editedValue = ShowExpectedValueEditor(assertion.Expected);
+            if (editedValue != null)
             {
-                Owner = this
-            };
-
-            if (editor.ShowDialog() == true)
-            {
-                assertion.Expected = BuildAssertionScript(editor.ScriptLanguage, editor.ScriptText);
+                assertion.Expected = editedValue;
+                RefreshJsonPreview();
             }
 
             e.Handled = true;
+        }
+
+        private string? ShowExpectedValueEditor(string currentValue)
+        {
+            var dialog = new Window
+            {
+                Title = "Assertion Expected Editor",
+                Width = 800,
+                Height = 460,
+                MinWidth = 620,
+                MinHeight = 320,
+                Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                ResizeMode = ResizeMode.CanResize
+            };
+
+            var root = new Grid
+            {
+                Margin = new Thickness(12)
+            };
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var editor = new TextBox
+            {
+                Text = currentValue ?? string.Empty,
+                AcceptsReturn = true,
+                AcceptsTab = true,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12
+            };
+            Grid.SetRow(editor, 0);
+            root.Children.Add(editor);
+
+            var buttons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+
+            var cancelButton = new Button
+            {
+                Content = "Cancel",
+                Width = 90,
+                IsCancel = true
+            };
+
+            var saveButton = new Button
+            {
+                Content = "Save",
+                Width = 90,
+                Margin = new Thickness(8, 0, 0, 0),
+                IsDefault = true
+            };
+            saveButton.Click += (_, _) => dialog.DialogResult = true;
+
+            buttons.Children.Add(cancelButton);
+            buttons.Children.Add(saveButton);
+
+            Grid.SetRow(buttons, 1);
+            root.Children.Add(buttons);
+
+            dialog.Content = root;
+            editor.Focus();
+
+            return dialog.ShowDialog() == true ? editor.Text : null;
         }
 
         private static (string Language, string Script) ParseAssertionScript(string input)
