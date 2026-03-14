@@ -3440,6 +3440,64 @@ namespace Test_Automation
                 })
                 .ToList();
 
+            var testPlanRequests = testPlanNodes
+                .Select(testPlan =>
+                {
+                    var componentIds = GetDescendantIds(testPlan)
+                        .Append(testPlan.Id)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    var planResults = allResults
+                        .Where(result => componentIds.Contains(result.ComponentId))
+                        .OrderBy(result => result.StartTime)
+                        .ToList();
+
+                    var componentRequests = planResults
+                        .GroupBy(result => new { result.ComponentId, result.ComponentName })
+                        .Select(group =>
+                        {
+                            var latest = group
+                                .OrderByDescending(result => result.EndTime ?? result.StartTime)
+                                .First();
+
+                            return new
+                            {
+                                componentId = group.Key.ComponentId,
+                                componentName = group.Key.ComponentName,
+                                componentType = FindNodeById(group.Key.ComponentId)?.Type ?? "Unknown",
+                                latestStatus = latest.Status,
+                                latestThreadIndex = latest.ThreadIndex,
+                                latestDurationMs = latest.DurationMs,
+                                latestRequest = BuildComponentRequestSnapshot(latest.Data),
+                                runs = group.Select(result => new
+                                {
+                                    threadIndex = result.ThreadIndex,
+                                    status = result.Status,
+                                    durationMs = result.DurationMs,
+                                    request = BuildComponentRequestSnapshot(result.Data)
+                                }).ToList()
+                            };
+                        })
+                        .OrderBy(component => component.componentName)
+                        .ToList();
+
+                    var planStatus = planResults.Count == 0
+                        ? "not-run"
+                        : (planResults.Any(result => string.Equals(result.Status, "failed", StringComparison.OrdinalIgnoreCase))
+                            ? "failed"
+                            : "passed");
+
+                    return new
+                    {
+                        id = testPlan.Id,
+                        name = testPlan.Name,
+                        status = planStatus,
+                        totalRuns = planResults.Count,
+                        components = componentRequests
+                    };
+                })
+                .ToList();
+
             var responseRuns = allResults
                 .Select(result => new
                 {
@@ -3527,6 +3585,70 @@ namespace Test_Automation
                 })
                 .ToList();
 
+            var testPlanResponses = testPlanNodes
+                .Select(testPlan =>
+                {
+                    var componentIds = GetDescendantIds(testPlan)
+                        .Append(testPlan.Id)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    var planResults = allResults
+                        .Where(result => componentIds.Contains(result.ComponentId))
+                        .OrderBy(result => result.StartTime)
+                        .ToList();
+
+                    var componentResponses = planResults
+                        .GroupBy(result => new { result.ComponentId, result.ComponentName })
+                        .Select(group =>
+                        {
+                            var latest = group
+                                .OrderByDescending(result => result.EndTime ?? result.StartTime)
+                                .First();
+
+                            return new
+                            {
+                                componentId = group.Key.ComponentId,
+                                componentName = group.Key.ComponentName,
+                                componentType = FindNodeById(group.Key.ComponentId)?.Type ?? "Unknown",
+                                latestStatus = latest.Status,
+                                latestPassed = latest.Passed,
+                                latestDurationMs = latest.DurationMs,
+                                latestThreadIndex = latest.ThreadIndex,
+                                latestError = string.IsNullOrWhiteSpace(latest.Error) ? null : latest.Error,
+                                latestResponse = BuildComponentResponseSnapshot(latest.Data),
+                                runs = group.Select(result => new
+                                {
+                                    threadIndex = result.ThreadIndex,
+                                    status = result.Status,
+                                    passed = result.Passed,
+                                    durationMs = result.DurationMs,
+                                    error = result.Error,
+                                    response = BuildComponentResponseSnapshot(result.Data)
+                                }).ToList()
+                            };
+                        })
+                        .OrderBy(component => component.componentName)
+                        .ToList();
+
+                    var planStatus = planResults.Count == 0
+                        ? "not-run"
+                        : (planResults.Any(result => string.Equals(result.Status, "failed", StringComparison.OrdinalIgnoreCase))
+                            ? "failed"
+                            : "passed");
+
+                    return new
+                    {
+                        id = testPlan.Id,
+                        name = testPlan.Name,
+                        status = planStatus,
+                        totalRuns = planResults.Count,
+                        passedRuns = planResults.Count(result => result.Passed),
+                        failedRuns = planResults.Count(result => !result.Passed),
+                        components = componentResponses
+                    };
+                })
+                .ToList();
+
             var runtimeVariables = _lastExecutionContext?.Variables
                 .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase)
                 ?? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
@@ -3545,15 +3667,16 @@ namespace Test_Automation
 
             PreviewRequest = JsonSerializer.Serialize(new
             {
-                component = nodeName,
-                type = "Project",
-                environment = SelectedEnvironment,
-                runMode = SelectedProjectRunMode,
-                testPlanCount = testPlanNodes.Count,
-                plannedComponents = GetDescendantIds(projectNode).Count(),
-                executedComponents = allResults.Select(result => result.ComponentId).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
-                runs = requestRuns,
-                structure = testPlanNodes.Select(BuildPreviewNodeStructure).ToList()
+                summary = new
+                {
+                    environment = SelectedEnvironment,
+                    runMode = SelectedProjectRunMode,
+                    testPlanCount = testPlanNodes.Count,
+                    plannedComponents = GetDescendantIds(projectNode).Count(),
+                    executedComponents = allResults.Select(result => result.ComponentId).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                    totalRuns = requestRuns.Count
+                },
+                testPlans = testPlanRequests
             }, new JsonSerializerOptions { WriteIndented = true });
 
             PreviewResponse = JsonSerializer.Serialize(new
@@ -3565,17 +3688,9 @@ namespace Test_Automation
                     executedComponents = allResults.Select(result => result.ComponentId).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
                     totalRuns = allResults.Count,
                     passedRuns = allResults.Count(result => result.Passed),
-                    failedRuns = allResults.Count(result => !result.Passed),
-                    assertionSummary = new
-                    {
-                        assertFailed = projectAssertionSummary.AssertFailed,
-                        expectFailed = projectAssertionSummary.ExpectFailed,
-                        passed = projectAssertionSummary.Passed
-                    },
-                    assertionDetails = BuildAssertionDetails(allResults)
+                    failedRuns = allResults.Count(result => !result.Passed)
                 },
-                runs = responseRuns,
-                testPlans = testPlanExecutions
+                testPlans = testPlanResponses
             }, new JsonSerializerOptions { WriteIndented = true });
 
             if (allResults.Count == 0)
@@ -4964,6 +5079,89 @@ namespace Test_Automation
 
             SelectedNode.Assertions.Remove(assertion);
             RefreshJsonPreview();
+        }
+
+        private void ScriptCodeTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (SelectedNode == null || !string.Equals(SelectedNode.Type, "Script", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var editor = new ScriptEditorWindow("Script Component Editor", ScriptLanguage, ScriptCode)
+            {
+                Owner = this
+            };
+
+            if (editor.ShowDialog() == true)
+            {
+                ScriptLanguage = string.IsNullOrWhiteSpace(editor.ScriptLanguage) ? "CSharp" : editor.ScriptLanguage;
+                ScriptCode = editor.ScriptText;
+            }
+
+            e.Handled = true;
+        }
+
+        private void AssertionExpectedTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not TextBox textBox || textBox.DataContext is not AssertionRule assertion)
+            {
+                return;
+            }
+
+            if (!string.Equals(assertion.Condition, "Script", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var (language, scriptBody) = ParseAssertionScript(assertion.Expected);
+            var editor = new ScriptEditorWindow("Assertion Script Editor", language, scriptBody)
+            {
+                Owner = this
+            };
+
+            if (editor.ShowDialog() == true)
+            {
+                assertion.Expected = BuildAssertionScript(editor.ScriptLanguage, editor.ScriptText);
+            }
+
+            e.Handled = true;
+        }
+
+        private static (string Language, string Script) ParseAssertionScript(string input)
+        {
+            var script = input ?? string.Empty;
+            var normalized = script.Replace("\r\n", "\n");
+            var lines = normalized.Split('\n');
+            if (lines.Length == 0)
+            {
+                return ("CSharp", script);
+            }
+
+            var firstLine = lines[0].Trim();
+            if (!firstLine.StartsWith("//lang", StringComparison.OrdinalIgnoreCase))
+            {
+                return ("CSharp", script);
+            }
+
+            var parts = firstLine.Split(':', 2, StringSplitOptions.TrimEntries);
+            var language = parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[1])
+                ? parts[1]
+                : "CSharp";
+            var remainingScript = string.Join("\n", lines.Skip(1));
+            return (language, remainingScript);
+        }
+
+        private static string BuildAssertionScript(string language, string script)
+        {
+            var normalizedLanguage = string.IsNullOrWhiteSpace(language) ? "CSharp" : language.Trim();
+            var normalizedScript = script ?? string.Empty;
+            if (string.Equals(normalizedLanguage, "CSharp", StringComparison.OrdinalIgnoreCase))
+            {
+                return normalizedScript;
+            }
+
+            return $"//lang:{normalizedLanguage}\n{normalizedScript}";
         }
 
         private static bool TryParseJsonRoot(string json, out JsonElement rootElement)

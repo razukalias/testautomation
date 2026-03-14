@@ -1,0 +1,157 @@
+<Window x:Class="Test_Automation.ScriptEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Script Editor"
+        Height="600"
+        Width="900"
+        MinHeight="480"
+        MinWidth="700"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TabControl>
+            <TabItem Header="Instructions &amp; Examples">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <TextBox x:Name="InstructionsTextBox"
+                             IsReadOnly="True"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             TextWrapping="Wrap"
+                             AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Disabled"
+                             FontFamily="Consolas"
+                             FontSize="13"
+                             Padding="4" />
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Script">
+                <Grid Margin="0,8,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Language" />
+                    <TextBox x:Name="LanguageTextBox"
+                             Grid.Row="0"
+                             Grid.Column="1"
+                             Margin="0,0,0,8"
+                             Text="CSharp"
+                             TextChanged="LanguageTextBox_TextChanged" />
+
+                    <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" BorderBrush="#D0D0D0" BorderThickness="1,1,0,1" Background="#F7F7F7" Padding="6,2">
+                            <TextBlock Text="#" Foreground="#666666" FontFamily="Consolas" FontSize="12" />
+                        </Border>
+
+                        <Border Grid.Column="1" BorderBrush="#D0D0D0" BorderThickness="1" Background="#F7F7F7">
+                            <ScrollViewer x:Name="ColumnRulerScrollViewer"
+                                          VerticalScrollBarVisibility="Disabled"
+                                          HorizontalScrollBarVisibility="Hidden"
+                                          Focusable="False">
+                                <TextBlock x:Name="ColumnRulerTextBlock"
+                                           Margin="6,2,6,2"
+                                           Foreground="#666666"
+                                           FontFamily="Consolas"
+                                           FontSize="12"
+                                           Text="1234567890" />
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+
+                    <Grid Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" BorderBrush="#D0D0D0" BorderThickness="1,1,0,1" Background="#F7F7F7">
+                            <ScrollViewer x:Name="LineNumbersScrollViewer"
+                                          VerticalScrollBarVisibility="Hidden"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          Focusable="False">
+                                <TextBlock x:Name="LineNumbersTextBlock"
+                                           Margin="6,4,6,4"
+                                           Foreground="#666666"
+                                           FontFamily="Consolas"
+                                           FontSize="13"
+                                           Text="1" />
+                            </ScrollViewer>
+                        </Border>
+
+                        <TextBox x:Name="ScriptTextBox"
+                                 Grid.Column="1"
+                                 AcceptsReturn="True"
+                                 AcceptsTab="True"
+                                 TextWrapping="NoWrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 FontFamily="Consolas"
+                                 FontSize="13"
+                                 TextChanged="ScriptTextBox_TextChanged"
+                                 SelectionChanged="ScriptTextBox_SelectionChanged"
+                                 ScrollViewer.ScrollChanged="ScriptTextBox_ScrollChanged" />
+                    </Grid>
+
+                    <TextBlock x:Name="CaretPositionTextBlock"
+                               Grid.Row="3"
+                               Grid.Column="0"
+                               Grid.ColumnSpan="2"
+                               Margin="0,6,0,0"
+                               HorizontalAlignment="Right"
+                               Foreground="#555555"
+                               Text="Ln 1, Col 1" />
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Run" Width="90" Margin="0,0,8,0" Click="RunButton_Click" />
+            <Button x:Name="ValidateButton" Content="Validate" Width="100" Margin="0,0,8,0" Click="ValidateButton_Click" />
+            <Button Content="Save" Width="90" Margin="0,0,8,0" Click="SaveButton_Click" IsDefault="True" />
+            <Button Content="Cancel" Width="90" Click="CancelButton_Click" IsCancel="True" />
+        </StackPanel>
+
+        <Expander x:Name="OutputExpander"
+                  Grid.Row="2"
+                  Margin="0,10,0,0"
+                  Header="Execution / Validation Log"
+                  IsExpanded="True">
+            <Grid Margin="0,6,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="170" />
+                </Grid.RowDefinitions>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                    <Button Content="Clear" Width="80" Click="ClearLogButton_Click" />
+                </StackPanel>
+                <TextBox x:Name="OutputLogTextBox"
+                         Grid.Row="1"
+                         IsReadOnly="True"
+                         AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         TextWrapping="NoWrap"
+                         FontFamily="Consolas"
+                         FontSize="12" />
+            </Grid>
+        </Expander>
+    </Grid>
+</Window>

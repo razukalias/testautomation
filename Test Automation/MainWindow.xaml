@@ -800,7 +800,15 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" VerticalAlignment="Top" Text="Code" />
-                                <TextBox Grid.Column="1" Text="{Binding ScriptCode, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="80" VerticalScrollBarVisibility="Auto" />
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding ScriptCode, UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True"
+                                         Height="80"
+                                         VerticalScrollBarVisibility="Auto"
+                                         IsReadOnly="True"
+                                         Cursor="Hand"
+                                         ToolTip="Click to open script editor"
+                                         PreviewMouseLeftButtonDown="ScriptCodeTextBox_PreviewMouseLeftButtonDown" />
                             </Grid>
                         </StackPanel>
                     </Border>
@@ -944,19 +952,26 @@
                                                           Margin="0,0,6,0"
                                                           ItemsSource="{Binding DataContext.AssertionConditionOptions, RelativeSource={RelativeSource AncestorType=Window}}"
                                                           SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" />
-                                                <TextBox Grid.Column="5" Margin="0,0,6,0" Text="{Binding Expected, UpdateSourceTrigger=PropertyChanged}">
+                                                <TextBox Grid.Column="5"
+                                                         Margin="0,0,6,0"
+                                                         Text="{Binding Expected, UpdateSourceTrigger=PropertyChanged}"
+                                                         PreviewMouseLeftButtonDown="AssertionExpectedTextBox_PreviewMouseLeftButtonDown">
                                                     <TextBox.Style>
                                                         <Style TargetType="TextBox">
                                                             <Setter Property="AcceptsReturn" Value="False" />
                                                             <Setter Property="TextWrapping" Value="NoWrap" />
                                                             <Setter Property="MinHeight" Value="24" />
                                                             <Setter Property="VerticalScrollBarVisibility" Value="Disabled" />
+                                                            <Setter Property="IsReadOnly" Value="False" />
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding Condition}" Value="Script">
                                                                     <Setter Property="AcceptsReturn" Value="True" />
                                                                     <Setter Property="TextWrapping" Value="Wrap" />
                                                                     <Setter Property="MinHeight" Value="90" />
                                                                     <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+                                                                    <Setter Property="IsReadOnly" Value="True" />
+                                                                    <Setter Property="Cursor" Value="Hand" />
+                                                                    <Setter Property="ToolTip" Value="Click to open script editor" />
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
