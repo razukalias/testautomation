@@ -116,6 +116,23 @@ namespace Test_Automation
         private readonly List<Test_Automation.Models.ExecutionContext> _activeProjectExecutionContexts = new();
         private bool _isRunInProgress;
         private string _selectedProjectRunMode = "Sequence";
+        private bool _isApplyingMainLayoutBounds;
+        private static readonly string MainLayoutStatePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TestAutomation",
+            "layout.main.json");
+
+        private sealed class MainLayoutState
+        {
+            public double LeftColumnWidth { get; set; }
+            public double LeftTopRowHeight { get; set; }
+            public double EditorTopRowHeight { get; set; }
+            public double EditorBottomRowHeight { get; set; }
+            public double AssertionRowsHeight { get; set; }
+            public double AssertionTreeHeight { get; set; }
+            public double AssertionTreeLeftWidth { get; set; }
+            public double AssertionTreeRightWidth { get; set; }
+        }
 
         public PlanNode? SelectedNode
         {
@@ -128,6 +145,7 @@ namespace Test_Automation
                 NotifySelectedNodeEditorProperties();
                 RebuildExtractorSourceOptions();
                 RefreshComponentPreview();
+                RefreshAssertionJsonTreePanel();
             }
         }
 
@@ -673,6 +691,16 @@ namespace Test_Automation
 
         private Point _dragStartPoint;
         private PlanNode? _draggedNode;
+        private bool _isSyncingAssertionTreeSource;
+        private string _assertionTreeSource = "PreviewResponse";
+
+        private sealed class AssertionTreeNodeTag
+        {
+            public string Source { get; set; } = string.Empty;
+            public string Path { get; set; } = string.Empty;
+            public string Expected { get; set; } = string.Empty;
+            public bool IsLeaf { get; set; }
+        }
 
         private static readonly string[] StepTypes =
         {
@@ -683,11 +711,177 @@ namespace Test_Automation
         {
             InitializeComponent();
             DataContext = this;
+            Loaded += MainWindow_Loaded;
+            Closing += MainWindow_Closing;
+            SizeChanged += MainWindow_SizeChanged;
             RootNodes.CollectionChanged += RootNodes_CollectionChanged;
             UpdateWindowTitle();
             RefreshEnvironmentOptions();
             RebuildVariableUsageMap();
             RefreshJsonPreview();
+        }
+
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            LoadMainLayoutState();
+            Dispatcher.BeginInvoke(new Action(EnforceMainLayoutMinimums), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        private void MainWindow_Closing(object? sender, CancelEventArgs e)
+        {
+            SaveMainLayoutState();
+        }
+
+        private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            EnforceMainLayoutMinimums();
+        }
+
+        private void EnforceMainLayoutMinimums()
+        {
+            if (_isApplyingMainLayoutBounds || MainContentGrid == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _isApplyingMainLayoutBounds = true;
+
+                const double topMin = 240;
+                const double bottomMin = 80;
+
+                var splitterHeight = 6d;
+                var available = Math.Max(MainContentGrid.ActualHeight - splitterHeight, 0);
+                if (available <= 0)
+                {
+                    return;
+                }
+
+                var desiredTop = EditorTopRow.ActualHeight;
+                var desiredBottom = EditorBottomRow.ActualHeight;
+                if (double.IsNaN(desiredTop) || desiredTop <= 0)
+                {
+                    desiredTop = topMin;
+                }
+
+                if (double.IsNaN(desiredBottom) || desiredBottom <= 0)
+                {
+                    desiredBottom = bottomMin;
+                }
+
+                if (available >= topMin + bottomMin)
+                {
+                    desiredTop = Math.Max(desiredTop, topMin);
+                    desiredBottom = Math.Max(desiredBottom, bottomMin);
+
+                    var total = desiredTop + desiredBottom;
+                    if (total > available)
+                    {
+                        desiredTop = Math.Max(topMin, available - desiredBottom);
+                        desiredBottom = Math.Max(bottomMin, available - desiredTop);
+                    }
+                }
+                else
+                {
+                    // Window too small for ideal mins: keep preview visible with a protected floor.
+                    var protectedBottom = Math.Max(80, available * 0.2);
+                    desiredBottom = Math.Min(available, protectedBottom);
+                    desiredTop = Math.Max(0, available - desiredBottom);
+                }
+
+                EditorTopRow.Height = new GridLength(Math.Max(desiredTop, 0), GridUnitType.Pixel);
+                EditorBottomRow.Height = new GridLength(Math.Max(desiredBottom, 0), GridUnitType.Pixel);
+            }
+            finally
+            {
+                _isApplyingMainLayoutBounds = false;
+            }
+        }
+
+        private void LoadMainLayoutState()
+        {
+            try
+            {
+                if (!File.Exists(MainLayoutStatePath))
+                {
+                    return;
+                }
+
+                var json = File.ReadAllText(MainLayoutStatePath);
+                var state = JsonSerializer.Deserialize<MainLayoutState>(json);
+                if (state == null)
+                {
+                    return;
+                }
+
+                ApplyPixelLength(MainLeftColumn, state.LeftColumnWidth, min: 220);
+                ApplyPixelLength(LeftTopControlsRow, state.LeftTopRowHeight, min: 140);
+                ApplyPixelLength(EditorTopRow, state.EditorTopRowHeight, min: 280);
+                ApplyPixelLength(EditorBottomRow, state.EditorBottomRowHeight, min: 80);
+                ApplyPixelLength(AssertionRowsAreaRow, state.AssertionRowsHeight, min: 100);
+                ApplyPixelLength(AssertionTreeAreaRow, state.AssertionTreeHeight, min: 220);
+                ApplyPixelLength(AssertionTreeLeftColumn, state.AssertionTreeLeftWidth, min: 160);
+                ApplyPixelLength(AssertionTreeRightColumn, state.AssertionTreeRightWidth, min: 220);
+            }
+            catch
+            {
+                // Ignore corrupt or inaccessible layout files and continue with defaults.
+            }
+        }
+
+        private void SaveMainLayoutState()
+        {
+            try
+            {
+                var state = new MainLayoutState
+                {
+                    LeftColumnWidth = MainLeftColumn.ActualWidth,
+                    LeftTopRowHeight = LeftTopControlsRow.ActualHeight,
+                    EditorTopRowHeight = EditorTopRow.ActualHeight,
+                    EditorBottomRowHeight = EditorBottomRow.ActualHeight,
+                    AssertionRowsHeight = AssertionRowsAreaRow.ActualHeight,
+                    AssertionTreeHeight = AssertionTreeAreaRow.ActualHeight,
+                    AssertionTreeLeftWidth = AssertionTreeLeftColumn.ActualWidth,
+                    AssertionTreeRightWidth = AssertionTreeRightColumn.ActualWidth
+                };
+
+                var directory = Path.GetDirectoryName(MainLayoutStatePath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                var json = JsonSerializer.Serialize(state, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+                File.WriteAllText(MainLayoutStatePath, json);
+            }
+            catch
+            {
+                // Ignore save issues to avoid interrupting app shutdown.
+            }
+        }
+
+        private static void ApplyPixelLength(ColumnDefinition definition, double value, double min)
+        {
+            if (definition == null || double.IsNaN(value) || double.IsInfinity(value) || value <= 0)
+            {
+                return;
+            }
+
+            definition.Width = new GridLength(Math.Max(value, min), GridUnitType.Pixel);
+        }
+
+        private static void ApplyPixelLength(RowDefinition definition, double value, double min)
+        {
+            if (definition == null || double.IsNaN(value) || double.IsInfinity(value) || value <= 0)
+            {
+                return;
+            }
+
+            definition.Height = new GridLength(Math.Max(value, min), GridUnitType.Pixel);
         }
 
         private void StopRunButton_Click(object sender, RoutedEventArgs e)
@@ -2608,6 +2802,7 @@ namespace Test_Automation
             });
 
             RefreshComponentPreview();
+            RefreshAssertionJsonTreePanel();
         }
 
         private void RefreshComponentPreview()
@@ -4989,6 +5184,8 @@ namespace Test_Automation
                     ExtractorSourceOptions.Add(key);
                 }
             }
+
+            RefreshAssertionJsonTreePanel();
         }
 
         private void AddExtractorButton_Click(object sender, RoutedEventArgs e)
@@ -5078,6 +5275,319 @@ namespace Test_Automation
             }
 
             SelectedNode.Assertions.Remove(assertion);
+            RefreshJsonPreview();
+        }
+
+        private void AssertionTreeSourceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isSyncingAssertionTreeSource)
+            {
+                return;
+            }
+
+            _assertionTreeSource = AssertionTreeSourceComboBox?.SelectedItem as string ?? string.Empty;
+            RefreshAssertionJsonTreePanel();
+        }
+
+        private void RefreshAssertionTreeButton_Click(object sender, RoutedEventArgs e)
+        {
+            RefreshAssertionJsonTreePanel();
+        }
+
+        private void AssertionJsonTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+        {
+            if (AssertionJsonTreeView?.SelectedItem is not TreeViewItem selectedItem
+                || selectedItem.Tag is not AssertionTreeNodeTag tag)
+            {
+                if (AssertionTreeSelectedPathTextBlock != null)
+                {
+                    AssertionTreeSelectedPathTextBlock.Text = "Path: (none)";
+                }
+
+                if (AssertionTreeValuePreviewTextBox != null)
+                {
+                    AssertionTreeValuePreviewTextBox.Text = "Select a tree node to preview value.";
+                }
+
+                return;
+            }
+
+            if (AssertionTreeSelectedPathTextBlock != null)
+            {
+                AssertionTreeSelectedPathTextBlock.Text = $"Path: {tag.Path}";
+            }
+
+            if (AssertionTreeValuePreviewTextBox != null)
+            {
+                AssertionTreeValuePreviewTextBox.Text = selectedItem.DataContext is JsonElement element
+                    ? GetJsonElementPreview(element)
+                    : tag.Expected;
+            }
+        }
+
+        private void AddSelectedTreeNodeAssertionButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || SelectedNode.Type == "Project")
+            {
+                return;
+            }
+
+            if (AssertionJsonTreeView?.SelectedItem is not TreeViewItem selectedItem
+                || selectedItem.Tag is not AssertionTreeNodeTag tag)
+            {
+                MessageBox.Show("Select a tree item first.", "Assertion Tree", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (string.Equals(tag.Path, "$", StringComparison.Ordinal))
+            {
+                MessageBox.Show("Select a node below root '$' to create an assertion row.", "Assertion Tree", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            AddOrUpdateAssertionFromTreeTag(tag);
+            RefreshJsonPreview();
+        }
+
+        private void GenerateTreeAssertionsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || SelectedNode.Type == "Project" || AssertionJsonTreeView == null)
+            {
+                return;
+            }
+
+            var allTags = AssertionJsonTreeView.Items
+                .OfType<TreeViewItem>()
+                .SelectMany(EnumerateAssertionTreeTags)
+                .Where(tag => !string.Equals(tag.Path, "$", StringComparison.Ordinal))
+                .ToList();
+
+            if (allTags.Count == 0)
+            {
+                MessageBox.Show("No tree items available to generate assertions.", "Assertion Tree", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var changedCount = 0;
+            foreach (var tag in allTags)
+            {
+                if (AddOrUpdateAssertionFromTreeTag(tag))
+                {
+                    changedCount++;
+                }
+            }
+
+            RefreshJsonPreview();
+            MessageBox.Show($"Generated/updated {changedCount} assertion row(s).", "Assertion Tree", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private bool AddOrUpdateAssertionFromTreeTag(AssertionTreeNodeTag tag)
+        {
+            if (SelectedNode == null || SelectedNode.Type == "Project")
+            {
+                return false;
+            }
+
+            var existing = SelectedNode.Assertions.FirstOrDefault(assertion =>
+                string.Equals(assertion.Source, tag.Source, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(assertion.JsonPath, tag.Path, StringComparison.OrdinalIgnoreCase));
+
+            if (existing == null)
+            {
+                SelectedNode.Assertions.Add(new AssertionRule(tag.Source, tag.Path, "Equals", tag.Expected, "Assert"));
+                return true;
+            }
+
+            var changed = false;
+            if (!string.Equals(existing.Expected, tag.Expected, StringComparison.Ordinal))
+            {
+                existing.Expected = tag.Expected;
+                changed = true;
+            }
+
+            if (!string.Equals(existing.Condition, "Equals", StringComparison.OrdinalIgnoreCase))
+            {
+                existing.Condition = "Equals";
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private IEnumerable<AssertionTreeNodeTag> EnumerateAssertionTreeTags(TreeViewItem item)
+        {
+            if (item.Tag is AssertionTreeNodeTag tag)
+            {
+                yield return tag;
+            }
+
+            foreach (var child in item.Items.OfType<TreeViewItem>())
+            {
+                foreach (var nested in EnumerateAssertionTreeTags(child))
+                {
+                    yield return nested;
+                }
+            }
+        }
+
+        private void RefreshAssertionJsonTreePanel()
+        {
+            if (AssertionJsonTreeView == null
+                || AssertionTreeSourceComboBox == null
+                || AssertionTreeValuePreviewTextBox == null
+                || AssertionTreeSelectedPathTextBlock == null)
+            {
+                return;
+            }
+
+            AssertionJsonTreeView.Items.Clear();
+            AssertionTreeSelectedPathTextBlock.Text = "Path: (none)";
+            AssertionTreeValuePreviewTextBox.Text = "Select a tree node to preview value.";
+
+            if (SelectedNode == null || string.Equals(SelectedNode.Type, "Project", StringComparison.OrdinalIgnoreCase))
+            {
+                AssertionTreeValuePreviewTextBox.Text = "Select a component node to use assertion tree.";
+                return;
+            }
+
+            var options = ExtractorSourceOptions.ToList();
+            if (options.Count == 0)
+            {
+                AssertionTreeValuePreviewTextBox.Text = "No assertion sources available.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_assertionTreeSource) || !options.Contains(_assertionTreeSource))
+            {
+                _assertionTreeSource = options.First();
+            }
+
+            _isSyncingAssertionTreeSource = true;
+            AssertionTreeSourceComboBox.SelectedItem = _assertionTreeSource;
+            _isSyncingAssertionTreeSource = false;
+
+            var sourceValue = ResolvePreviewSourceValue(_assertionTreeSource);
+            if (string.IsNullOrWhiteSpace(sourceValue))
+            {
+                AssertionTreeValuePreviewTextBox.Text = "Source has no data yet. Run or preview component first.";
+                return;
+            }
+
+            if (!TryParseJsonRoot(sourceValue, out var rootElement))
+            {
+                AssertionTreeValuePreviewTextBox.Text = "Selected source is not valid JSON.";
+                return;
+            }
+
+            var rootItem = CreateAssertionTreePanelItem("$", "$", rootElement, _assertionTreeSource);
+            rootItem.IsExpanded = true;
+            AssertionJsonTreeView.Items.Add(rootItem);
+            rootItem.IsSelected = true;
+        }
+
+        private static TreeViewItem CreateAssertionTreePanelItem(string label, string path, JsonElement element, string source)
+        {
+            var item = new TreeViewItem
+            {
+                Header = BuildJsonTreeLabel(label, element),
+                Tag = new AssertionTreeNodeTag
+                {
+                    Source = source,
+                    Path = path,
+                    Expected = BuildExpectedValueFromElement(element),
+                    IsLeaf = true
+                },
+                DataContext = element
+            };
+
+            if (element.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in element.EnumerateObject())
+                {
+                    var childPath = path + "." + property.Name;
+                    item.Items.Add(CreateAssertionTreePanelItem(property.Name, childPath, property.Value, source));
+                }
+            }
+            else if (element.ValueKind == JsonValueKind.Array)
+            {
+                var index = 0;
+                foreach (var child in element.EnumerateArray())
+                {
+                    var childLabel = "[" + index + "]";
+                    var childPath = path + childLabel;
+                    item.Items.Add(CreateAssertionTreePanelItem(childLabel, childPath, child, source));
+                    index++;
+                }
+            }
+            else if (element.ValueKind == JsonValueKind.String)
+            {
+                var stringValue = element.GetString() ?? string.Empty;
+                if (TryParseJsonString(stringValue, out var embeddedJson))
+                {
+                    if (embeddedJson.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var property in embeddedJson.EnumerateObject())
+                        {
+                            var childPath = path + "." + property.Name;
+                            item.Items.Add(CreateAssertionTreePanelItem(property.Name, childPath, property.Value, source));
+                        }
+                    }
+                    else if (embeddedJson.ValueKind == JsonValueKind.Array)
+                    {
+                        var index = 0;
+                        foreach (var child in embeddedJson.EnumerateArray())
+                        {
+                            var childLabel = "[" + index + "]";
+                            var childPath = path + childLabel;
+                            item.Items.Add(CreateAssertionTreePanelItem(childLabel, childPath, child, source));
+                            index++;
+                        }
+                    }
+                }
+            }
+
+            if (item.Tag is AssertionTreeNodeTag tag)
+            {
+                tag.IsLeaf = item.Items.Count == 0;
+            }
+
+            return item;
+        }
+
+        private void ExploreAssertionExpectedJsonButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || sender is not Button button || button.DataContext is not AssertionRule assertion)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(assertion.Source))
+            {
+                MessageBox.Show("Select a source first.", "Assertion JSON Tree", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var sourceValue = ResolvePreviewSourceValue(assertion.Source);
+            if (string.IsNullOrWhiteSpace(sourceValue))
+            {
+                MessageBox.Show("Selected source is empty. Run or preview the component first.", "Assertion JSON Tree", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (!TryParseJsonRoot(sourceValue, out var rootElement))
+            {
+                MessageBox.Show("Selected source is not a valid JSON document.", "Assertion JSON Tree", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var selection = ShowJsonSelectionPicker(rootElement, assertion.JsonPath, "Assertion JSON Tree", "Use Node");
+            if (!selection.HasValue)
+            {
+                return;
+            }
+
+            assertion.JsonPath = selection.Value.Path;
+            assertion.Expected = selection.Value.ExpectedValue;
             RefreshJsonPreview();
         }
 
@@ -5181,9 +5691,19 @@ namespace Test_Automation
 
         private string? ShowJsonPathPicker(JsonElement rootElement, string currentPath)
         {
+            var selection = ShowJsonSelectionPicker(rootElement, currentPath, "JSON Path Explorer", "Use Path");
+            return selection?.Path;
+        }
+
+        private (string Path, string ExpectedValue)? ShowJsonSelectionPicker(
+            JsonElement rootElement,
+            string currentPath,
+            string title,
+            string confirmButtonText)
+        {
             var dialog = new Window
             {
-                Title = "JSON Path Explorer",
+                Title = title,
                 Width = 900,
                 Height = 500,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -5243,6 +5763,8 @@ namespace Test_Automation
                 FontFamily = new FontFamily("Consolas")
             };
 
+            string selectedExpectedValue = string.Empty;
+
             tree.SelectedItemChanged += (_, _) =>
             {
                 if (tree.SelectedItem is not TreeViewItem selectedItem)
@@ -5254,10 +5776,12 @@ namespace Test_Automation
                 if (selectedItem.DataContext is JsonElement selectedElement)
                 {
                     valuePreview.Text = GetJsonElementPreview(selectedElement);
+                    selectedExpectedValue = BuildExpectedValueFromElement(selectedElement);
                 }
                 else
                 {
                     valuePreview.Text = string.Empty;
+                    selectedExpectedValue = string.Empty;
                 }
             };
 
@@ -5302,7 +5826,7 @@ namespace Test_Automation
 
             var okButton = new Button
             {
-                Content = "Use Path",
+                Content = confirmButtonText,
                 Width = 90,
                 IsDefault = true
             };
@@ -5321,7 +5845,22 @@ namespace Test_Automation
                 return null;
             }
 
-            return selectedPathBox.Text;
+            return (selectedPathBox.Text, selectedExpectedValue);
+        }
+
+        private static string BuildExpectedValueFromElement(JsonElement element)
+        {
+            return element.ValueKind switch
+            {
+                JsonValueKind.Object => element.GetRawText(),
+                JsonValueKind.Array => element.GetRawText(),
+                JsonValueKind.String => element.GetString() ?? string.Empty,
+                JsonValueKind.Number => element.GetRawText(),
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                JsonValueKind.Null => "null",
+                _ => GetJsonElementPreview(element)
+            };
         }
 
         private static TreeViewItem CreateJsonTreeItem(string label, string path, JsonElement element)

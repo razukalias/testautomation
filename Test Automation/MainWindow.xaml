@@ -16,13 +16,20 @@
     </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="320" />
-            <ColumnDefinition Width="*" />
+            <ColumnDefinition x:Name="MainLeftColumn" Width="320" MinWidth="220" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition x:Name="MainRightColumn" Width="*" MinWidth="420" />
         </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0" BorderBrush="#D0D0D0" BorderThickness="0,0,1,0" Background="#FAFAFA">
-            <DockPanel Margin="12">
-            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+            <Grid Margin="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition x:Name="LeftTopControlsRow" Height="Auto" MinHeight="140" />
+                    <RowDefinition Height="6" />
+                    <RowDefinition x:Name="LeftTreeRow" Height="*" MinHeight="120" />
+                </Grid.RowDefinitions>
+            <StackPanel Grid.Row="0">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                 <Button x:Name="AddProjectButton"
                     Height="32"
                     Width="100"
@@ -47,7 +54,7 @@
                     Content="Load JSON"
                     Click="LoadProjectButton_Click" />
             </StackPanel>
-            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                 <Button x:Name="RunTestPlanButton"
                     Height="32"
                     Width="120"
@@ -61,20 +68,31 @@
                     IsEnabled="False"
                     Click="StopRunButton_Click" />
             </StackPanel>
-            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                 <TextBlock VerticalAlignment="Center" Text="Environment" Margin="0,0,8,0" />
                 <ComboBox Width="170"
                           ItemsSource="{Binding EnvironmentOptions}"
                           SelectedItem="{Binding SelectedEnvironment, UpdateSourceTrigger=PropertyChanged}" />
             </StackPanel>
-            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                 <TextBlock VerticalAlignment="Center" Text="Trace Level" Margin="0,0,8,0" />
                 <ComboBox Width="170"
                           ItemsSource="{Binding TraceLevelOptions}"
                           SelectedItem="{Binding SelectedTraceLevel, UpdateSourceTrigger=PropertyChanged}" />
             </StackPanel>
+            </StackPanel>
 
-                <TreeView x:Name="PlanTreeView"
+                <GridSplitter Grid.Row="1"
+                              Height="6"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Center"
+                              Background="#E0E0E0"
+                              ResizeDirection="Rows"
+                              ResizeBehavior="PreviousAndNext"
+                              ShowsPreview="True" />
+
+                <TreeView Grid.Row="2"
+                          x:Name="PlanTreeView"
                           ItemsSource="{Binding RootNodes}"
                           AllowDrop="True"
                           SelectedItemChanged="PlanTreeView_SelectedItemChanged"
@@ -146,19 +164,34 @@
                         </HierarchicalDataTemplate>
                     </TreeView.ItemTemplate>
                 </TreeView>
-            </DockPanel>
+            </Grid>
         </Border>
 
-        <Grid Grid.Column="1" Background="#FFFFFF" Margin="16">
+        <GridSplitter Grid.Column="1"
+                  Width="6"
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Stretch"
+                  Background="#E0E0E0"
+                  ResizeDirection="Columns"
+                  ResizeBehavior="PreviousAndNext"
+                  ShowsPreview="True" />
+
+        <Grid x:Name="MainContentGrid" Grid.Column="2" Background="#FFFFFF" Margin="16">
             <Grid.RowDefinitions>
-                <RowDefinition Height="2*" />
+                <RowDefinition x:Name="EditorTopRow" Height="2*" MinHeight="280" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="3*" />
+                <RowDefinition x:Name="EditorBottomRow" Height="*" MinHeight="80" />
             </Grid.RowDefinitions>
 
             <Border BorderBrush="#D8D8D8" BorderThickness="1" Padding="12" CornerRadius="4">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" MinHeight="220" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="0,0,0,8">
                     <TextBlock Text="Node Editor" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
 
                     <Grid Margin="0,0,0,8">
@@ -204,77 +237,144 @@
                                 Visibility="{Binding HasSelectedNodeChildren, Converter={StaticResource BoolToVisibilityConverter}}" />
                     </StackPanel>
 
-                    <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
-                            Visibility="{Binding IsProjectSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                <TextBlock Text="Project" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                <ComboBox x:Name="ProjectRunModeComboBox"
-                                          Width="110"
-                                          Margin="10,0,6,0"
-                                          ItemsSource="{Binding ProjectRunModeOptions}"
-                                          SelectedItem="{Binding SelectedProjectRunMode, UpdateSourceTrigger=PropertyChanged}" />
-                                <Button x:Name="RunProjectTestPlansButton"
-                                        Width="130"
-                                        Content="Run TestPlans"
-                                        Click="RunProjectTestPlansButton_Click" />
-                            </StackPanel>
-                            <Grid Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="100" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Description" />
-                                <TextBox Grid.Column="1" Text="{Binding ProjectDescription, UpdateSourceTrigger=PropertyChanged}" />
-                            </Grid>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="100" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Environment" />
-                                <TextBox Grid.Column="1" Text="{Binding ProjectEnvironment, UpdateSourceTrigger=PropertyChanged}" ToolTip="Use comma, semicolon, or new line to define dropdown options." />
-                            </Grid>
-                            <TextBlock Text="Variables" FontWeight="SemiBold" Margin="0,10,0,6" />
-                            <ScrollViewer Height="120" VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding ProjectVariablesForEditor}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="0,0,0,6">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBox Grid.Column="0" Margin="0,0,6,0" Text="{Binding Key, UpdateSourceTrigger=LostFocus}" />
-                                                <TextBox Grid.Column="1" Margin="0,0,6,0" Text="{Binding Value, UpdateSourceTrigger=LostFocus}" />
-                                                <TextBlock Grid.Column="2" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#666666">
-                                                    <TextBlock.Text>
-                                                        <MultiBinding Converter="{StaticResource VariableUsageLabelConverter}">
-                                                            <Binding Path="Key" />
-                                                            <Binding Path="DataContext.VariableUsageVersion" RelativeSource="{RelativeSource AncestorType=Window}" />
-                                                        </MultiBinding>
-                                                    </TextBlock.Text>
-                                                    <TextBlock.ToolTip>
-                                                        <MultiBinding Converter="{StaticResource VariableUsageTooltipConverter}">
-                                                            <Binding Path="Key" />
-                                                            <Binding Path="DataContext.VariableUsageVersion" RelativeSource="{RelativeSource AncestorType=Window}" />
-                                                        </MultiBinding>
-                                                    </TextBlock.ToolTip>
-                                                </TextBlock>
-                                                <Button Grid.Column="3" Content="X" Width="26" Height="24" Click="RemoveProjectVariableButton_Click" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-
-                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                <Button Content="Add Variable" Width="110" Click="AddProjectVariableButton_Click" />
-                            </StackPanel>
                         </StackPanel>
+
+                        <Grid Grid.Row="1">
+
+                    <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
+                            VerticalAlignment="Stretch"
+                            Visibility="{Binding IsProjectSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TabControl HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                            <TabItem Header="Properties">
+                                <Grid Margin="8">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" MinHeight="120" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Grid.Row="0">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <TextBlock Text="Project" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <ComboBox x:Name="ProjectRunModeComboBox"
+                                                      Width="110"
+                                                      Margin="10,0,6,0"
+                                                      ItemsSource="{Binding ProjectRunModeOptions}"
+                                                      SelectedItem="{Binding SelectedProjectRunMode, UpdateSourceTrigger=PropertyChanged}" />
+                                            <Button x:Name="RunProjectTestPlansButton"
+                                                    Width="130"
+                                                    Content="Run TestPlans"
+                                                    Click="RunProjectTestPlansButton_Click" />
+                                        </StackPanel>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Description" />
+                                            <TextBox Grid.Column="1" Text="{Binding ProjectDescription, UpdateSourceTrigger=PropertyChanged}" />
+                                        </Grid>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Environment" />
+                                            <TextBox Grid.Column="1" Text="{Binding ProjectEnvironment, UpdateSourceTrigger=PropertyChanged}" ToolTip="Use comma, semicolon, or new line to define dropdown options." />
+                                        </Grid>
+                                        <TextBlock Text="Variables" FontWeight="SemiBold" Margin="0,10,0,6" />
+                                    </StackPanel>
+
+                                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" VerticalAlignment="Stretch">
+                                        <ItemsControl ItemsSource="{Binding ProjectVariablesForEditor}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,0,0,6">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBox Grid.Column="0" Margin="0,0,6,0" Text="{Binding Key, UpdateSourceTrigger=LostFocus}" />
+                                                        <TextBox Grid.Column="1" Margin="0,0,6,0" Text="{Binding Value, UpdateSourceTrigger=LostFocus}" />
+                                                        <TextBlock Grid.Column="2" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#666666">
+                                                            <TextBlock.Text>
+                                                                <MultiBinding Converter="{StaticResource VariableUsageLabelConverter}">
+                                                                    <Binding Path="Key" />
+                                                                    <Binding Path="DataContext.VariableUsageVersion" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                                </MultiBinding>
+                                                            </TextBlock.Text>
+                                                            <TextBlock.ToolTip>
+                                                                <MultiBinding Converter="{StaticResource VariableUsageTooltipConverter}">
+                                                                    <Binding Path="Key" />
+                                                                    <Binding Path="DataContext.VariableUsageVersion" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                                </MultiBinding>
+                                                            </TextBlock.ToolTip>
+                                                        </TextBlock>
+                                                        <Button Grid.Column="3" Content="X" Width="26" Height="24" Click="RemoveProjectVariableButton_Click" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+
+                                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,6,0,0">
+                                        <Button Content="Add Variable" Width="110" Click="AddProjectVariableButton_Click" />
+                                    </StackPanel>
+                                </Grid>
+                            </TabItem>
+
+                            <TabItem Header="Preview">
+                                <TabControl Margin="8">
+                                    <TabItem Header="Flow JSON">
+                                        <TextBox Text="{Binding JsonPreview}"
+                                                 FontFamily="Consolas"
+                                                 FontSize="12"
+                                                 AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 HorizontalScrollBarVisibility="Auto"
+                                                 IsReadOnly="True" />
+                                    </TabItem>
+                                    <TabItem Header="Variables">
+                                        <TextBox Text="{Binding VariablesPreview}"
+                                                 FontFamily="Consolas"
+                                                 FontSize="12"
+                                                 AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 HorizontalScrollBarVisibility="Auto"
+                                                 IsReadOnly="True" />
+                                    </TabItem>
+                                    <TabItem Header="Logs">
+                                        <TextBox Text="{Binding PreviewLogs}"
+                                                 FontFamily="Consolas"
+                                                 FontSize="12"
+                                                 AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 HorizontalScrollBarVisibility="Auto"
+                                                 IsReadOnly="True" />
+                                    </TabItem>
+                                    <TabItem Header="Assertions">
+                                        <TextBox Text="{Binding AssertionPreview}"
+                                                 FontFamily="Consolas"
+                                                 FontSize="12"
+                                                 AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 HorizontalScrollBarVisibility="Auto"
+                                                 IsReadOnly="True" />
+                                    </TabItem>
+                                </TabControl>
+                            </TabItem>
+                        </TabControl>
                     </Border>
+
+                    <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
+                            VerticalAlignment="Stretch"
+                            Visibility="{Binding IsComponentSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TabControl HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" VerticalAlignment="Stretch">
+                                <TabItem Header="Properties">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <StackPanel Margin="8">
 
                         <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,6,0,8"
                             Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -813,8 +913,12 @@
                         </StackPanel>
                     </Border>
 
-                    <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
-                            Visibility="{Binding IsComponentSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </TabItem>
+
+                                <TabItem Header="Extract Variables">
+                    <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8">
                         <StackPanel>
                             <TextBlock Text="Extract Variables" FontWeight="SemiBold" Margin="0,0,0,6" />
 
@@ -831,7 +935,7 @@
                                 <TextBlock Grid.Column="3" Text="Variable Name" FontWeight="SemiBold" />
                             </Grid>
 
-                            <ScrollViewer Height="100" VerticalScrollBarVisibility="Auto">
+                            <ScrollViewer MinHeight="120" VerticalScrollBarVisibility="Auto" VerticalAlignment="Stretch">
                                 <ItemsControl ItemsSource="{Binding SelectedNode.Extractors}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -890,9 +994,11 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
+                                </TabItem>
 
-                    <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
-                            Visibility="{Binding IsComponentSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TabItem Header="Assertions">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8">
                         <StackPanel>
                             <TextBlock Text="Assertions" FontWeight="SemiBold" Margin="0,0,0,6" />
 
@@ -915,107 +1021,321 @@
                                 <TextBlock Grid.Column="6" Text="Status" FontWeight="SemiBold" />
                             </Grid>
 
-                            <ScrollViewer Height="110" VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding SelectedNode.Assertions}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="0,0,0,6">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="90" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="150" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <ComboBox Grid.Column="0"
-                                                          Margin="0,0,6,0"
-                                                          ItemsSource="{Binding DataContext.AssertionModeOptions, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                          SelectedItem="{Binding Mode, UpdateSourceTrigger=PropertyChanged}" />
-                                                <ComboBox Grid.Column="1"
-                                                          Margin="0,0,6,0"
-                                                          ItemsSource="{Binding DataContext.ExtractorSourceOptions, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                          IsEditable="True"
-                                                          IsTextSearchEnabled="True"
-                                                          Text="{Binding Source, UpdateSourceTrigger=PropertyChanged}" />
-                                                <TextBox Grid.Column="2" Margin="0,0,6,0" Text="{Binding JsonPath, UpdateSourceTrigger=PropertyChanged}" />
-                                                <Button Grid.Column="3"
-                                                        Margin="0,0,6,0"
-                                                        Width="32"
-                                                        Height="24"
-                                                        Content="..."
-                                                        ToolTip="Explore JSON paths"
-                                                        Click="ExploreJsonPathButton_Click" />
-                                                <ComboBox Grid.Column="4"
-                                                          Margin="0,0,6,0"
-                                                          ItemsSource="{Binding DataContext.AssertionConditionOptions, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                          SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" />
-                                                <TextBox Grid.Column="5"
-                                                         Margin="0,0,6,0"
-                                                         Text="{Binding Expected, UpdateSourceTrigger=PropertyChanged}"
-                                                         PreviewMouseLeftButtonDown="AssertionExpectedTextBox_PreviewMouseLeftButtonDown">
-                                                    <TextBox.Style>
-                                                        <Style TargetType="TextBox">
-                                                            <Setter Property="AcceptsReturn" Value="False" />
-                                                            <Setter Property="TextWrapping" Value="NoWrap" />
-                                                            <Setter Property="MinHeight" Value="24" />
-                                                            <Setter Property="VerticalScrollBarVisibility" Value="Disabled" />
-                                                            <Setter Property="IsReadOnly" Value="False" />
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Condition}" Value="Script">
-                                                                    <Setter Property="AcceptsReturn" Value="True" />
-                                                                    <Setter Property="TextWrapping" Value="Wrap" />
-                                                                    <Setter Property="MinHeight" Value="90" />
-                                                                    <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
-                                                                    <Setter Property="IsReadOnly" Value="True" />
-                                                                    <Setter Property="Cursor" Value="Hand" />
-                                                                    <Setter Property="ToolTip" Value="Click to open script editor" />
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBox.Style>
-                                                </TextBox>
-                                                <Border Grid.Column="6" Margin="0,0,6,0" CornerRadius="3" Padding="6,2" BorderBrush="#D1D5DB" BorderThickness="1">
-                                                    <TextBlock Text="{Binding StatusLabel}" ToolTip="{Binding StatusMessage}" HorizontalAlignment="Center">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="Foreground" Value="#6B7280" />
+                            <Grid MinHeight="260" Margin="0,0,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition x:Name="AssertionRowsAreaRow" Height="120" MinHeight="70" />
+                                    <RowDefinition Height="6" />
+                                    <RowDefinition x:Name="AssertionTreeAreaRow" Height="*" MinHeight="120" />
+                                </Grid.RowDefinitions>
+
+                                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding SelectedNode.Assertions}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="90" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="150" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <ComboBox Grid.Column="0"
+                                                              Margin="0,0,6,0"
+                                                              ItemsSource="{Binding DataContext.AssertionModeOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              SelectedItem="{Binding Mode, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <ComboBox Grid.Column="1"
+                                                              Margin="0,0,6,0"
+                                                              ItemsSource="{Binding DataContext.ExtractorSourceOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              IsEditable="True"
+                                                              IsTextSearchEnabled="True"
+                                                              Text="{Binding Source, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <TextBox Grid.Column="2" Margin="0,0,6,0" Text="{Binding JsonPath, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="0,0,6,0">
+                                                        <Button Width="32"
+                                                                Height="24"
+                                                                Margin="0,0,4,0"
+                                                                Content="..."
+                                                                ToolTip="Explore JSON paths"
+                                                                Click="ExploreJsonPathButton_Click" />
+                                                        <Button Width="40"
+                                                                Height="24"
+                                                                Content="Tree"
+                                                                ToolTip="Pick JSON node for assertion expected value"
+                                                                Click="ExploreAssertionExpectedJsonButton_Click" />
+                                                    </StackPanel>
+                                                    <ComboBox Grid.Column="4"
+                                                              Margin="0,0,6,0"
+                                                              ItemsSource="{Binding DataContext.AssertionConditionOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <TextBox Grid.Column="5"
+                                                             Margin="0,0,6,0"
+                                                             Text="{Binding Expected, UpdateSourceTrigger=PropertyChanged}"
+                                                             PreviewMouseLeftButtonDown="AssertionExpectedTextBox_PreviewMouseLeftButtonDown">
+                                                        <TextBox.Style>
+                                                            <Style TargetType="TextBox">
+                                                                <Setter Property="AcceptsReturn" Value="False" />
+                                                                <Setter Property="TextWrapping" Value="NoWrap" />
+                                                                <Setter Property="MinHeight" Value="24" />
+                                                                <Setter Property="VerticalScrollBarVisibility" Value="Disabled" />
+                                                                <Setter Property="IsReadOnly" Value="False" />
                                                                 <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding LastResultState}" Value="Passed">
-                                                                        <Setter Property="Foreground" Value="#166534" />
-                                                                        <Setter Property="FontWeight" Value="SemiBold" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding LastResultState}" Value="AssertFailed">
-                                                                        <Setter Property="Foreground" Value="#B00020" />
-                                                                        <Setter Property="FontWeight" Value="SemiBold" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding LastResultState}" Value="ExpectFailed">
-                                                                        <Setter Property="Foreground" Value="#A16207" />
-                                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                                    <DataTrigger Binding="{Binding Condition}" Value="Script">
+                                                                        <Setter Property="AcceptsReturn" Value="True" />
+                                                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                                                        <Setter Property="MinHeight" Value="90" />
+                                                                        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+                                                                        <Setter Property="IsReadOnly" Value="True" />
+                                                                        <Setter Property="Cursor" Value="Hand" />
+                                                                        <Setter Property="ToolTip" Value="Click to open script editor" />
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
-                                                </Border>
-                                                <Button Grid.Column="7" Content="X" Width="26" Height="24" Click="RemoveAssertionButton_Click" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
+                                                        </TextBox.Style>
+                                                    </TextBox>
+                                                    <Border Grid.Column="6" Margin="0,0,6,0" CornerRadius="3" Padding="6,2" BorderBrush="#D1D5DB" BorderThickness="1">
+                                                        <TextBlock Text="{Binding StatusLabel}" ToolTip="{Binding StatusMessage}" HorizontalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="#6B7280" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding LastResultState}" Value="Passed">
+                                                                            <Setter Property="Foreground" Value="#166534" />
+                                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding LastResultState}" Value="AssertFailed">
+                                                                            <Setter Property="Foreground" Value="#B00020" />
+                                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding LastResultState}" Value="ExpectFailed">
+                                                                            <Setter Property="Foreground" Value="#A16207" />
+                                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Border>
+                                                    <Button Grid.Column="7" Content="X" Width="26" Height="24" Click="RemoveAssertionButton_Click" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
 
-                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                <Button Content="Add Assertion" Width="120" Click="AddAssertionButton_Click" />
-                            </StackPanel>
+                                <GridSplitter Grid.Row="1"
+                                              Height="6"
+                                              HorizontalAlignment="Stretch"
+                                              VerticalAlignment="Center"
+                                              Background="#E0E0E0"
+                                              ResizeDirection="Rows"
+                                              ResizeBehavior="PreviousAndNext"
+                                              ShowsPreview="True" />
+
+                                <Border Grid.Row="2" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="3" Padding="8" Margin="0,8,0,0">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" MinHeight="80" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition x:Name="AssertionTreeLeftColumn" Width="2*" MinWidth="160" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition x:Name="AssertionTreeRightColumn" Width="3*" MinWidth="220" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="Assertion Tree" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                        <TextBlock Text="Source" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <ComboBox x:Name="AssertionTreeSourceComboBox"
+                                                  Width="180"
+                                                  Margin="0,0,6,0"
+                                                  ItemsSource="{Binding ExtractorSourceOptions}"
+                                                  SelectionChanged="AssertionTreeSourceComboBox_SelectionChanged" />
+                                        <Button Width="70" Content="Refresh" Click="RefreshAssertionTreeButton_Click" />
+                                    </StackPanel>
+
+                                    <TreeView x:Name="AssertionJsonTreeView"
+                                              Grid.Row="1"
+                                              Grid.Column="0"
+                                              Margin="0,0,8,0"
+                                              SelectedItemChanged="AssertionJsonTreeView_SelectedItemChanged" />
+
+                                     <GridSplitter Grid.Row="1"
+                                                Grid.Column="1"
+                                                Width="6"
+                                                HorizontalAlignment="Stretch"
+                                                VerticalAlignment="Stretch"
+                                                Background="#E0E0E0"
+                                                ResizeDirection="Columns"
+                                                ResizeBehavior="PreviousAndNext"
+                                                ShowsPreview="True" />
+
+                                    <TextBox x:Name="AssertionTreeValuePreviewTextBox"
+                                             Grid.Row="1"
+                                            Grid.Column="2"
+                                             IsReadOnly="True"
+                                             AcceptsReturn="True"
+                                             VerticalScrollBarVisibility="Auto"
+                                             HorizontalScrollBarVisibility="Auto"
+                                             FontFamily="Consolas"
+                                             FontSize="12"
+                                             Text="Select a tree node to preview value." />
+
+                                    <Grid Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="AssertionTreeSelectedPathTextBlock"
+                                                   Grid.Column="0"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,12,0"
+                                                   Foreground="#555555"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Text="Path: (none)" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <Button Width="130"
+                                                    Margin="0,0,6,0"
+                                                    Content="Add Selected Row"
+                                                    Click="AddSelectedTreeNodeAssertionButton_Click" />
+                                            <Button Width="190"
+                                                    Content="Generate Rows For Tree"
+                                                    Click="GenerateTreeAssertionsButton_Click" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Grid>
+                                </Border>
+                            </Grid>
+
                         </StackPanel>
                     </Border>
+                        </ScrollViewer>
+                                </TabItem>
+
+                                <TabItem Header="Preview">
+                                    <TabControl Margin="8" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                                        <TabItem Header="Request">
+                                            <TextBox Text="{Binding PreviewRequest}"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Response">
+                                            <TextBox Text="{Binding PreviewResponse}"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Logs">
+                                            <TextBox Text="{Binding PreviewLogs}"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Variables">
+                                            <TextBox Text="{Binding VariablesPreview}"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Assertions">
+                                            <TextBox Text="{Binding AssertionPreview}"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Req Headers"
+                                                 Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBox Text="{Binding HttpRequestHeadersPreview}"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Req Cookies"
+                                                Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBox Text="{Binding HttpRequestCookiesPreview}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="12"
+                                                   AcceptsReturn="True"
+                                                   VerticalScrollBarVisibility="Auto"
+                                                   HorizontalScrollBarVisibility="Auto"
+                                                   IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Req Metadata"
+                                                Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBox Text="{Binding HttpRequestMetadataPreview}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="12"
+                                                   AcceptsReturn="True"
+                                                   VerticalScrollBarVisibility="Auto"
+                                                   HorizontalScrollBarVisibility="Auto"
+                                                   IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Res Headers"
+                                                 Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBox Text="{Binding HttpResponseHeadersPreview}"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Res Cookies"
+                                                Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBox Text="{Binding HttpResponseCookiesPreview}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="12"
+                                                   AcceptsReturn="True"
+                                                   VerticalScrollBarVisibility="Auto"
+                                                   HorizontalScrollBarVisibility="Auto"
+                                                   IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Res Metadata"
+                                                Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBox Text="{Binding HttpResponseMetadataPreview}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="12"
+                                                   AcceptsReturn="True"
+                                                   VerticalScrollBarVisibility="Auto"
+                                                   HorizontalScrollBarVisibility="Auto"
+                                                   IsReadOnly="True" />
+                                        </TabItem>
+                                    </TabControl>
+                                </TabItem>
+                            </TabControl>
+                    </Border>
+
+                            </Grid>
+
+                            <StackPanel Grid.Row="2" Visibility="Collapsed">
 
                     <TextBlock Text="Settings" FontWeight="SemiBold" Margin="0,8,0,8" Visibility="Collapsed" />
 
-                    <ScrollViewer Height="140" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                    <ScrollViewer MinHeight="140" VerticalScrollBarVisibility="Auto" VerticalAlignment="Stretch" Visibility="Collapsed">
                         <ItemsControl ItemsSource="{Binding SelectedNode.Settings}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -1055,7 +1375,7 @@
                         <Button Content="Add Setting" Width="100" Click="AddSettingButton_Click" />
                     </StackPanel>
                     </StackPanel>
-                </ScrollViewer>
+                </Grid>
             </Border>
 
             <GridSplitter Grid.Row="1"
@@ -1067,174 +1387,11 @@
                           ResizeDirection="Rows"
                           ResizeBehavior="PreviousAndNext" />
 
-            <Border Grid.Row="2" BorderBrush="#D8D8D8" BorderThickness="1" Padding="8" CornerRadius="4" Margin="0,0,0,0">
-                <TabControl>
-                    <TabItem Header="Request">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
-                                <Button Content="Clear" Width="80" Click="ClearRequestButton_Click" />
-                            </StackPanel>
-                            <TextBox Grid.Row="1"
-                                     Text="{Binding PreviewRequest}"
-                                     FontFamily="Consolas"
-                                     FontSize="13"
-                                     AcceptsReturn="True"
-                                     VerticalScrollBarVisibility="Auto"
-                                     HorizontalScrollBarVisibility="Auto"
-                                     IsReadOnly="True" />
-                        </Grid>
-                    </TabItem>
-                    <TabItem Header="Response">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
-                                <Button Content="Clear" Width="80" Click="ClearResponseButton_Click" />
-                            </StackPanel>
-                            <TextBox Grid.Row="1"
-                                     Text="{Binding PreviewResponse}"
-                                     FontFamily="Consolas"
-                                     FontSize="13"
-                                     AcceptsReturn="True"
-                                     VerticalScrollBarVisibility="Auto"
-                                     HorizontalScrollBarVisibility="Auto"
-                                     IsReadOnly="True" />
-                        </Grid>
-                    </TabItem>
-                    <TabItem Header="Req Headers"
-                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBox Text="{Binding HttpRequestHeadersPreview}"
-                               FontFamily="Consolas"
-                               FontSize="13"
-                               AcceptsReturn="True"
-                               VerticalScrollBarVisibility="Auto"
-                               HorizontalScrollBarVisibility="Auto"
-                               IsReadOnly="True" />
-                    </TabItem>
-                    <TabItem Header="Req Cookies"
-                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBox Text="{Binding HttpRequestCookiesPreview}"
-                               FontFamily="Consolas"
-                               FontSize="13"
-                               AcceptsReturn="True"
-                               VerticalScrollBarVisibility="Auto"
-                               HorizontalScrollBarVisibility="Auto"
-                               IsReadOnly="True" />
-                    </TabItem>
-                    <TabItem Header="Req Metadata"
-                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBox Text="{Binding HttpRequestMetadataPreview}"
-                               FontFamily="Consolas"
-                               FontSize="13"
-                               AcceptsReturn="True"
-                               VerticalScrollBarVisibility="Auto"
-                               HorizontalScrollBarVisibility="Auto"
-                               IsReadOnly="True" />
-                    </TabItem>
-                    <TabItem Header="Res Headers"
-                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBox Text="{Binding HttpResponseHeadersPreview}"
-                               FontFamily="Consolas"
-                               FontSize="13"
-                               AcceptsReturn="True"
-                               VerticalScrollBarVisibility="Auto"
-                               HorizontalScrollBarVisibility="Auto"
-                               IsReadOnly="True" />
-                    </TabItem>
-                    <TabItem Header="Res Cookies"
-                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBox Text="{Binding HttpResponseCookiesPreview}"
-                               FontFamily="Consolas"
-                               FontSize="13"
-                               AcceptsReturn="True"
-                               VerticalScrollBarVisibility="Auto"
-                               HorizontalScrollBarVisibility="Auto"
-                               IsReadOnly="True" />
-                    </TabItem>
-                    <TabItem Header="Res Metadata"
-                            Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBox Text="{Binding HttpResponseMetadataPreview}"
-                               FontFamily="Consolas"
-                               FontSize="13"
-                               AcceptsReturn="True"
-                               VerticalScrollBarVisibility="Auto"
-                               HorizontalScrollBarVisibility="Auto"
-                               IsReadOnly="True" />
-                    </TabItem>
-                    <TabItem Header="Logs">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
-                                <Button Content="Clear" Width="80" Click="ClearLogsButton_Click" />
-                            </StackPanel>
-                            <TextBox Grid.Row="1"
-                                     Text="{Binding PreviewLogs}"
-                                     FontFamily="Consolas"
-                                     FontSize="13"
-                                     AcceptsReturn="True"
-                                     VerticalScrollBarVisibility="Auto"
-                                     HorizontalScrollBarVisibility="Auto"
-                                     IsReadOnly="True" />
-                        </Grid>
-                    </TabItem>
-                    <TabItem Header="Flow JSON"
-                             Visibility="{Binding IsProjectSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBox Text="{Binding JsonPreview}"
-                                 FontFamily="Consolas"
-                                 FontSize="13"
-                                 AcceptsReturn="True"
-                                 VerticalScrollBarVisibility="Auto"
-                                 HorizontalScrollBarVisibility="Auto"
-                                 IsReadOnly="True" />
-                    </TabItem>
-                    <TabItem Header="Variables">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
-                                <Button Content="Clear" Width="80" Click="ClearVariablesButton_Click" />
-                            </StackPanel>
-                            <TextBox Grid.Row="1"
-                                     Text="{Binding VariablesPreview}"
-                                     FontFamily="Consolas"
-                                     FontSize="13"
-                                     AcceptsReturn="True"
-                                     VerticalScrollBarVisibility="Auto"
-                                     HorizontalScrollBarVisibility="Auto"
-                                     IsReadOnly="True" />
-                        </Grid>
-                    </TabItem>
-                    <TabItem Header="Assertions">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
-                                <Button Content="Clear" Width="80" Click="ClearAssertionsButton_Click" />
-                            </StackPanel>
-                            <TextBox Grid.Row="1"
-                                     Text="{Binding AssertionPreview}"
-                                     FontFamily="Consolas"
-                                     FontSize="13"
-                                     AcceptsReturn="True"
-                                     VerticalScrollBarVisibility="Auto"
-                                     HorizontalScrollBarVisibility="Auto"
-                                     IsReadOnly="True" />
-                        </Grid>
-                    </TabItem>
-                </TabControl>
+            <Border Grid.Row="2" MinHeight="80" BorderBrush="#D8D8D8" BorderThickness="1" Padding="12" CornerRadius="4" Margin="0,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="Global Preview Panel" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Text="Preview tabs are now available directly inside Project and Component editor tabs." Foreground="#555555" />
+                </StackPanel>
             </Border>
         </Grid>
     </Grid>

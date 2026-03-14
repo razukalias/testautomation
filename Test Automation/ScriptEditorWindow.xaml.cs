@@ -1,6 +1,8 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -10,6 +12,17 @@ namespace Test_Automation
 {
     public partial class ScriptEditorWindow : Window
     {
+        private static readonly string ScriptEditorLayoutStatePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TestAutomation",
+            "layout.script-editor.json");
+
+        private sealed class ScriptEditorLayoutState
+        {
+            public double TopRowHeight { get; set; }
+            public double LogRowHeight { get; set; }
+        }
+
         public string ScriptLanguage => LanguageTextBox.Text?.Trim() ?? "CSharp";
         public string ScriptText => ScriptTextBox.Text ?? string.Empty;
 
@@ -22,12 +35,82 @@ namespace Test_Automation
             InstructionsTextBox.Text = BuildInstructions();
             Loaded += (_, _) =>
             {
+                LoadScriptEditorLayoutState();
                 SetValidateButtonState(null);
                 UpdateColumnRuler();
                 UpdateLineNumbers();
                 UpdateCaretPosition();
                 ScriptTextBox.Focus();
             };
+            Closing += ScriptEditorWindow_Closing;
+        }
+
+        private void ScriptEditorWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            SaveScriptEditorLayoutState();
+        }
+
+        private void LoadScriptEditorLayoutState()
+        {
+            try
+            {
+                if (!File.Exists(ScriptEditorLayoutStatePath))
+                {
+                    return;
+                }
+
+                var json = File.ReadAllText(ScriptEditorLayoutStatePath);
+                var state = JsonSerializer.Deserialize<ScriptEditorLayoutState>(json);
+                if (state == null)
+                {
+                    return;
+                }
+
+                ApplyPixelLength(ScriptEditorTopRow, state.TopRowHeight, min: 220);
+                ApplyPixelLength(ScriptEditorLogRow, state.LogRowHeight, min: 120);
+            }
+            catch
+            {
+                // Ignore bad persisted layout and use defaults.
+            }
+        }
+
+        private void SaveScriptEditorLayoutState()
+        {
+            try
+            {
+                var state = new ScriptEditorLayoutState
+                {
+                    TopRowHeight = ScriptEditorTopRow.ActualHeight,
+                    LogRowHeight = ScriptEditorLogRow.ActualHeight
+                };
+
+                var directory = Path.GetDirectoryName(ScriptEditorLayoutStatePath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                var json = JsonSerializer.Serialize(state, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+                File.WriteAllText(ScriptEditorLayoutStatePath, json);
+            }
+            catch
+            {
+                // Ignore save failures.
+            }
+        }
+
+        private static void ApplyPixelLength(RowDefinition definition, double value, double min)
+        {
+            if (definition == null || double.IsNaN(value) || double.IsInfinity(value) || value <= 0)
+            {
+                return;
+            }
+
+            definition.Height = new GridLength(Math.Max(value, min), GridUnitType.Pixel);
         }
 
         private void ValidateButton_Click(object sender, RoutedEventArgs e)
