@@ -5356,15 +5356,22 @@ namespace Test_Automation
                 return;
             }
 
-            var allTags = AssertionJsonTreeView.Items
-                .OfType<TreeViewItem>()
-                .SelectMany(EnumerateAssertionTreeTags)
+            // Generate from selected node subtree; fall back to root when nothing is selected.
+            var selectedTreeItem = AssertionJsonTreeView.SelectedItem as TreeViewItem;
+            var generationRoot = selectedTreeItem ?? AssertionJsonTreeView.Items.OfType<TreeViewItem>().FirstOrDefault();
+            if (generationRoot == null)
+            {
+                MessageBox.Show("No tree items available to generate assertions.", "Assertion Tree", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var allTags = EnumerateAssertionTreeTags(generationRoot)
                 .Where(tag => !string.Equals(tag.Path, "$", StringComparison.Ordinal))
                 .ToList();
 
             if (allTags.Count == 0)
             {
-                MessageBox.Show("No tree items available to generate assertions.", "Assertion Tree", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("Selected tree node has no child paths to generate assertion rows.", "Assertion Tree", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
