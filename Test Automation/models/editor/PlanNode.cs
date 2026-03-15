@@ -155,6 +155,7 @@ namespace Test_Automation.Models.Editor
             {
                 Settings.Add(new NodeSetting("Description", string.Empty));
                 Settings.Add(new NodeSetting("Environment", "dev"));
+                Settings.Add(new NodeSetting("UrlCatalog", "[]"));
             }
             else if (type == "Http")
             {
@@ -248,6 +249,7 @@ namespace Test_Automation.Models.Editor
             {
                 Settings.Add(new NodeSetting("Description", string.Empty));
                 Settings.Add(new NodeSetting("Environment", "dev"));
+                Settings.Add(new NodeSetting("UrlCatalog", "[]"));
             }
         }
 

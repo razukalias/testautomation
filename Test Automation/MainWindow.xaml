@@ -325,6 +325,124 @@
                                 </Grid>
                             </TabItem>
 
+                            <TabItem Header="URLs">
+                                <Grid Margin="8">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0"
+                                               Margin="0,0,0,8"
+                                               Text="Define reusable base URLs and endpoint templates here. HTTP and GraphQL components can browse them and auto-fill their respective fields." />
+
+                                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding ProjectUrlCatalogEntries}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border BorderBrush="#E3E3E3" BorderThickness="1" CornerRadius="3" Padding="8" Margin="0,0,0,8">
+                                                        <StackPanel>
+                                                            <Grid Margin="0,0,0,6">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="100" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Base Name" />
+                                                                <TextBox Grid.Column="1" Margin="0,0,6,0" Text="{Binding Name, UpdateSourceTrigger=LostFocus}" />
+                                                                <Button Grid.Column="2" Margin="0,0,6,0" Content="Add Endpoint" Width="95" Click="AddProjectUrlEndpointButton_Click" />
+                                                                <Button Grid.Column="3" Content="Remove" Width="70" Click="RemoveProjectUrlBaseButton_Click" />
+                                                            </Grid>
+                                                            <Grid Margin="0,0,0,8">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="100" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Base URL" />
+                                                                <TextBox Grid.Column="1" Text="{Binding BaseUrl, UpdateSourceTrigger=LostFocus}" />
+                                                            </Grid>
+
+                                                            <ItemsControl ItemsSource="{Binding Endpoints}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border BorderBrush="#D7D7D7" BorderThickness="1" CornerRadius="3" Padding="8" Margin="0,0,0,8">
+                                                                            <StackPanel>
+                                                                                <Grid Margin="0,0,0,6">
+                                                                                    <Grid.ColumnDefinitions>
+                                                                                        <ColumnDefinition Width="100" />
+                                                                                        <ColumnDefinition Width="*" />
+                                                                                        <ColumnDefinition Width="100" />
+                                                                                        <ColumnDefinition Width="140" />
+                                                                                        <ColumnDefinition Width="Auto" />
+                                                                                    </Grid.ColumnDefinitions>
+                                                                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Endpoint" />
+                                                                                    <TextBox Grid.Column="1" Margin="0,0,6,0" Text="{Binding Name, UpdateSourceTrigger=LostFocus}" />
+                                                                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="Method" />
+                                                                                    <ComboBox Grid.Column="3" Margin="0,0,6,0"
+                                                                                              ItemsSource="{Binding DataContext.HttpMethodOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                              SelectedItem="{Binding Method, UpdateSourceTrigger=PropertyChanged}" />
+                                                                                    <Button Grid.Column="4" Content="Remove" Width="70" Click="RemoveProjectUrlEndpointButton_Click" />
+                                                                                </Grid>
+                                                                                <Grid Margin="0,0,0,6">
+                                                                                    <Grid.ColumnDefinitions>
+                                                                                        <ColumnDefinition Width="100" />
+                                                                                        <ColumnDefinition Width="*" />
+                                                                                    </Grid.ColumnDefinitions>
+                                                                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Path" />
+                                                                                    <TextBox Grid.Column="1" Text="{Binding Path, UpdateSourceTrigger=LostFocus}" />
+                                                                                </Grid>
+                                                                                <Grid Margin="0,0,0,6">
+                                                                                    <Grid.ColumnDefinitions>
+                                                                                        <ColumnDefinition Width="100" />
+                                                                                        <ColumnDefinition Width="*" />
+                                                                                    </Grid.ColumnDefinitions>
+                                                                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Parameters" />
+                                                                                    <TextBox Grid.Column="1" Text="{Binding Parameters, UpdateSourceTrigger=LostFocus}" ToolTip="HTTP query string or GraphQL variables fallback." />
+                                                                                </Grid>
+                                                                                <Grid Margin="0,0,0,6">
+                                                                                    <Grid.ColumnDefinitions>
+                                                                                        <ColumnDefinition Width="100" />
+                                                                                        <ColumnDefinition Width="*" />
+                                                                                    </Grid.ColumnDefinitions>
+                                                                                    <TextBlock Grid.Column="0" VerticalAlignment="Top" Text="Body" />
+                                                                                    <TextBox Grid.Column="1" Height="70" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Text="{Binding Body, UpdateSourceTrigger=LostFocus}" ToolTip="HTTP body or GraphQL query fallback." />
+                                                                                </Grid>
+                                                                                <Grid Margin="0,0,0,6">
+                                                                                    <Grid.ColumnDefinitions>
+                                                                                        <ColumnDefinition Width="100" />
+                                                                                        <ColumnDefinition Width="*" />
+                                                                                    </Grid.ColumnDefinitions>
+                                                                                    <TextBlock Grid.Column="0" VerticalAlignment="Top" Text="GraphQL Query" />
+                                                                                    <TextBox Grid.Column="1" Height="70" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Text="{Binding Query, UpdateSourceTrigger=LostFocus}" />
+                                                                                </Grid>
+                                                                                <Grid>
+                                                                                    <Grid.ColumnDefinitions>
+                                                                                        <ColumnDefinition Width="100" />
+                                                                                        <ColumnDefinition Width="*" />
+                                                                                    </Grid.ColumnDefinitions>
+                                                                                    <TextBlock Grid.Column="0" VerticalAlignment="Top" Text="GraphQL Vars" />
+                                                                                    <TextBox Grid.Column="1" Height="70" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Text="{Binding Variables, UpdateSourceTrigger=LostFocus}" />
+                                                                                </Grid>
+                                                                            </StackPanel>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+
+                                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                                        <Button Content="Add Base URL" Width="110" Click="AddProjectUrlBaseButton_Click" />
+                                    </StackPanel>
+                                </Grid>
+                            </TabItem>
+
                             <TabItem Header="Preview">
                                 <Grid Margin="8">
                                     <Grid.RowDefinitions>
@@ -394,6 +512,38 @@
                             Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
                         <StackPanel>
                             <TextBlock Text="HTTP" FontWeight="SemiBold" Margin="0,0,0,6" />
+                            <Border Background="#F7F9FC" BorderBrush="#D8E2F0" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="Fill From Project URLs" FontWeight="SemiBold" Foreground="#2F4F6F" />
+                                    <TextBlock Margin="0,2,0,8"
+                                               Foreground="#5F6F82"
+                                               Text="Optional helper. Choose a saved base URL and endpoint, then apply it to the manual fields below." />
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Base URL" />
+                                        <ComboBox Grid.Column="1"
+                                                  ItemsSource="{Binding CatalogBaseUrlOptions}"
+                                                  SelectedItem="{Binding SelectedHttpCatalogBase, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Endpoint" />
+                                        <ComboBox Grid.Column="1"
+                                                  ItemsSource="{Binding CatalogEndpointOptions}"
+                                                  SelectedItem="{Binding SelectedHttpCatalogEndpoint, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="Apply" Width="80" Margin="0,0,8,0" Click="ApplyHttpCatalogSelectionButton_Click" />
+                                        <Button Content="Clear" Width="80" Click="ClearHttpCatalogSelectionButton_Click" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="100" />
@@ -564,6 +714,38 @@
                             Visibility="{Binding IsGraphQlSelected, Converter={StaticResource BoolToVisibilityConverter}}">
                         <StackPanel>
                             <TextBlock Text="GraphQL" FontWeight="SemiBold" Margin="0,0,0,6" />
+                            <Border Background="#F7F9FC" BorderBrush="#D8E2F0" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="Fill From Project URLs" FontWeight="SemiBold" Foreground="#2F4F6F" />
+                                    <TextBlock Margin="0,2,0,8"
+                                               Foreground="#5F6F82"
+                                               Text="Optional helper. Choose a saved base URL and endpoint, then apply it to the manual fields below." />
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Base URL" />
+                                        <ComboBox Grid.Column="1"
+                                                  ItemsSource="{Binding CatalogBaseUrlOptions}"
+                                                  SelectedItem="{Binding SelectedGraphQlCatalogBase, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Endpoint" />
+                                        <ComboBox Grid.Column="1"
+                                                  ItemsSource="{Binding CatalogEndpointOptions}"
+                                                  SelectedItem="{Binding SelectedGraphQlCatalogEndpoint, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="Apply" Width="80" Margin="0,0,8,0" Click="ApplyGraphQlCatalogSelectionButton_Click" />
+                                        <Button Content="Clear" Width="80" Click="ClearGraphQlCatalogSelectionButton_Click" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="100" />

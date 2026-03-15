@@ -124,11 +124,21 @@ namespace Test_Automation
         private bool _isRunInProgress;
         private string _selectedProjectRunMode = "Sequence";
         private string _selectedPreviewDataMode = "Last Run";
+        private bool _isApplyingCatalogSelection;
+        private bool _isSynchronizingCatalogEditor;
+        private readonly ObservableCollection<ApiCatalogBaseUrlEntry> _projectUrlCatalogEntries = new();
+        private readonly ObservableCollection<string> _catalogBaseUrlOptions = new();
+        private readonly ObservableCollection<string> _catalogEndpointOptions = new();
+        private readonly List<ApiCatalogBaseUrlEntry> _parsedApiCatalog = new();
         private bool _isApplyingMainLayoutBounds;
         private static readonly string MainLayoutStatePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "TestAutomation",
             "layout.main.json");
+        private static readonly string AppStatePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TestAutomation",
+            "appstate.json");
 
         private sealed class MainLayoutState
         {
@@ -142,6 +152,145 @@ namespace Test_Automation
             public double AssertionTreeRightWidth { get; set; }
         }
 
+        private sealed class AppState
+        {
+            public string? LastProjectFilePath { get; set; }
+        }
+
+        public sealed class ApiCatalogBaseUrlEntry
+            : INotifyPropertyChanged
+        {
+            private string _name = string.Empty;
+            private string _baseUrl = string.Empty;
+
+            public string Name
+            {
+                get => _name;
+                set
+                {
+                    if (_name == value) return;
+                    _name = value;
+                    OnPropertyChanged();
+                }
+            }
+
+            public string BaseUrl
+            {
+                get => _baseUrl;
+                set
+                {
+                    if (_baseUrl == value) return;
+                    _baseUrl = value;
+                    OnPropertyChanged();
+                }
+            }
+
+            public ObservableCollection<ApiCatalogEndpointEntry> Endpoints { get; set; } = new();
+
+            public event PropertyChangedEventHandler? PropertyChanged;
+
+            private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            }
+        }
+
+        public sealed class ApiCatalogEndpointEntry
+            : INotifyPropertyChanged
+        {
+            private string _name = string.Empty;
+            private string _path = string.Empty;
+            private string _method = string.Empty;
+            private string _body = string.Empty;
+            private string _parameters = string.Empty;
+            private string _query = string.Empty;
+            private string _variables = string.Empty;
+
+            public string Name
+            {
+                get => _name;
+                set
+                {
+                    if (_name == value) return;
+                    _name = value;
+                    OnPropertyChanged();
+                }
+            }
+
+            public string Path
+            {
+                get => _path;
+                set
+                {
+                    if (_path == value) return;
+                    _path = value;
+                    OnPropertyChanged();
+                }
+            }
+
+            public string Method
+            {
+                get => _method;
+                set
+                {
+                    if (_method == value) return;
+                    _method = value;
+                    OnPropertyChanged();
+                }
+            }
+
+            public string Body
+            {
+                get => _body;
+                set
+                {
+                    if (_body == value) return;
+                    _body = value;
+                    OnPropertyChanged();
+                }
+            }
+
+            public string Parameters
+            {
+                get => _parameters;
+                set
+                {
+                    if (_parameters == value) return;
+                    _parameters = value;
+                    OnPropertyChanged();
+                }
+            }
+
+            public string Query
+            {
+                get => _query;
+                set
+                {
+                    if (_query == value) return;
+                    _query = value;
+                    OnPropertyChanged();
+                }
+            }
+
+            public string Variables
+            {
+                get => _variables;
+                set
+                {
+                    if (_variables == value) return;
+                    _variables = value;
+                    OnPropertyChanged();
+                }
+            }
+
+            public event PropertyChangedEventHandler? PropertyChanged;
+
+            private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            }
+        }
+
         public PlanNode? SelectedNode
         {
             get => _selectedNode;
@@ -151,6 +300,7 @@ namespace Test_Automation
                 _selectedNode = value;
                 OnPropertyChanged();
                 NotifySelectedNodeEditorProperties();
+                SyncCatalogSelectionFromCurrentNode();
                 RebuildExtractorSourceOptions();
                 RefreshComponentPreview();
                 RefreshAssertionJsonTreePanel();
@@ -332,6 +482,76 @@ namespace Test_Automation
             {
                 SetSettingValue("Environment", value);
                 RefreshEnvironmentOptions();
+            }
+        }
+
+        public string ProjectUrlCatalogJson
+        {
+            get => GetProjectSettingValue("UrlCatalog", "[]");
+            set
+            {
+                SetProjectSettingValue("UrlCatalog", value ?? "[]");
+                if (!_isSynchronizingCatalogEditor)
+                {
+                    RefreshApiCatalogState();
+                }
+            }
+        }
+
+        public ObservableCollection<ApiCatalogBaseUrlEntry> ProjectUrlCatalogEntries => _projectUrlCatalogEntries;
+
+        public ObservableCollection<string> CatalogBaseUrlOptions => _catalogBaseUrlOptions;
+        public ObservableCollection<string> CatalogEndpointOptions => _catalogEndpointOptions;
+
+        public string SelectedHttpCatalogBase
+        {
+            get => GetSettingValue("CatalogBase", string.Empty);
+            set
+            {
+                SetSettingValue("CatalogBase", value ?? string.Empty);
+                if (_isApplyingCatalogSelection)
+                {
+                    return;
+                }
+
+                RefreshCatalogEndpointOptions();
+                OnPropertyChanged();
+            }
+        }
+
+        public string SelectedHttpCatalogEndpoint
+        {
+            get => GetSettingValue("CatalogEndpoint", string.Empty);
+            set
+            {
+                SetSettingValue("CatalogEndpoint", value ?? string.Empty);
+                OnPropertyChanged();
+            }
+        }
+
+        public string SelectedGraphQlCatalogBase
+        {
+            get => GetSettingValue("CatalogBase", string.Empty);
+            set
+            {
+                SetSettingValue("CatalogBase", value ?? string.Empty);
+                if (_isApplyingCatalogSelection)
+                {
+                    return;
+                }
+
+                RefreshCatalogEndpointOptions();
+                OnPropertyChanged();
+            }
+        }
+
+        public string SelectedGraphQlCatalogEndpoint
+        {
+            get => GetSettingValue("CatalogEndpoint", string.Empty);
+            set
+            {
+                SetSettingValue("CatalogEndpoint", value ?? string.Empty);
+                OnPropertyChanged();
             }
         }
 
@@ -771,17 +991,20 @@ namespace Test_Automation
             RefreshEnvironmentOptions();
             RebuildVariableUsageMap();
             RefreshJsonPreview();
+            RefreshApiCatalogState();
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             LoadMainLayoutState();
+            RestoreLastProjectIfAvailable();
             Dispatcher.BeginInvoke(new Action(EnforceMainLayoutMinimums), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         private void MainWindow_Closing(object? sender, CancelEventArgs e)
         {
             SaveMainLayoutState();
+            SaveAppState();
         }
 
         private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -916,6 +1139,109 @@ namespace Test_Automation
             }
         }
 
+        private void RestoreLastProjectIfAvailable()
+        {
+            try
+            {
+                if (!File.Exists(AppStatePath))
+                {
+                    return;
+                }
+
+                var json = File.ReadAllText(AppStatePath);
+                var state = JsonSerializer.Deserialize<AppState>(json);
+                var lastPath = state?.LastProjectFilePath;
+                if (string.IsNullOrWhiteSpace(lastPath))
+                {
+                    return;
+                }
+
+                if (!File.Exists(lastPath))
+                {
+                    MessageBox.Show(
+                        $"Last project file was not found:\n{lastPath}",
+                        "Last Project",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    _currentProjectFilePath = null;
+                    UpdateWindowTitle();
+                    SaveAppState();
+                    return;
+                }
+
+                TryLoadProjectFromFile(lastPath, "Last Project");
+            }
+            catch
+            {
+                // Ignore corrupt or inaccessible app state and continue with defaults.
+            }
+        }
+
+        private void SaveAppState()
+        {
+            try
+            {
+                var state = new AppState
+                {
+                    LastProjectFilePath = _currentProjectFilePath
+                };
+
+                var directory = Path.GetDirectoryName(AppStatePath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                var json = JsonSerializer.Serialize(state, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+                File.WriteAllText(AppStatePath, json);
+            }
+            catch
+            {
+                // Ignore save issues to avoid interrupting app behavior.
+            }
+        }
+
+        private bool TryLoadProjectFromFile(string filePath, string dialogTitle)
+        {
+            try
+            {
+                var json = File.ReadAllText(filePath);
+                var model = JsonSerializer.Deserialize<ProjectFileModel>(json);
+
+                if (model?.Project == null)
+                {
+                    MessageBox.Show("Invalid project file format.", dialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
+                var root = FromFileModel(model.Project, null);
+                if (root.Type != "Project")
+                {
+                    MessageBox.Show("Root node must be of type Project.", dialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
+                RootNodes.Clear();
+                RootNodes.Add(root);
+                SelectedNode = root;
+                _currentProjectFilePath = filePath;
+                UpdateWindowTitle();
+                RefreshEnvironmentOptions();
+                RefreshJsonPreview();
+                UpdateProjectVariablesPreview();
+                SaveAppState();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load project: {ex.Message}", dialogTitle, MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+        }
+
         private static void ApplyPixelLength(ColumnDefinition definition, double value, double min)
         {
             if (definition == null || double.IsNaN(value) || double.IsInfinity(value) || value <= 0)
@@ -1023,6 +1349,7 @@ namespace Test_Automation
                 SelectedNode = root;
                 _currentProjectFilePath = null;
                 UpdateWindowTitle();
+                SaveAppState();
                 RefreshEnvironmentOptions();
                 RefreshJsonPreview();
                 UpdateProjectVariablesPreview();
@@ -1085,6 +1412,7 @@ namespace Test_Automation
                 SaveProjectToFile(dialog.FileName, projectNode);
                 _currentProjectFilePath = dialog.FileName;
                 UpdateWindowTitle();
+                SaveAppState();
                 MessageBox.Show("Project saved successfully.", "Save Project", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
@@ -1143,37 +1471,7 @@ namespace Test_Automation
                 return;
             }
 
-            try
-            {
-                var json = File.ReadAllText(dialog.FileName);
-                var model = JsonSerializer.Deserialize<ProjectFileModel>(json);
-
-                if (model?.Project == null)
-                {
-                    MessageBox.Show("Invalid project file format.", "Load Project", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                var root = FromFileModel(model.Project, null);
-                if (root.Type != "Project")
-                {
-                    MessageBox.Show("Root node must be of type Project.", "Load Project", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                RootNodes.Clear();
-                RootNodes.Add(root);
-                SelectedNode = root;
-                _currentProjectFilePath = dialog.FileName;
-                UpdateWindowTitle();
-                RefreshEnvironmentOptions();
-                RefreshJsonPreview();
-                UpdateProjectVariablesPreview();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to load project: {ex.Message}", "Load Project", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            TryLoadProjectFromFile(dialog.FileName, "Load Project");
         }
 
         private async void RunTestPlanButton_Click(object sender, RoutedEventArgs e)
@@ -2197,6 +2495,151 @@ namespace Test_Automation
             RefreshJsonPreview();
         }
 
+        private void AddProjectUrlBaseButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || !string.Equals(SelectedNode.Type, "Project", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var entry = new ApiCatalogBaseUrlEntry
+            {
+                Name = "New Base URL",
+                BaseUrl = "https://api.example.com"
+            };
+
+            RegisterApiCatalogBaseEntry(entry);
+            _projectUrlCatalogEntries.Add(entry);
+            SyncApiCatalogSettingFromEditor();
+        }
+
+        private void RemoveProjectUrlBaseButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || !string.Equals(SelectedNode.Type, "Project", StringComparison.OrdinalIgnoreCase)
+                || sender is not Button button || button.DataContext is not ApiCatalogBaseUrlEntry entry)
+            {
+                return;
+            }
+
+            UnregisterApiCatalogBaseEntry(entry);
+            _projectUrlCatalogEntries.Remove(entry);
+            SyncApiCatalogSettingFromEditor();
+        }
+
+        private void AddProjectUrlEndpointButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || !string.Equals(SelectedNode.Type, "Project", StringComparison.OrdinalIgnoreCase)
+                || sender is not Button button || button.DataContext is not ApiCatalogBaseUrlEntry entry)
+            {
+                return;
+            }
+
+            var endpoint = new ApiCatalogEndpointEntry
+            {
+                Name = "New Endpoint",
+                Path = "/resource",
+                Method = "GET",
+                Variables = "{}"
+            };
+
+            entry.Endpoints.Add(endpoint);
+        }
+
+        private void RemoveProjectUrlEndpointButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedNode == null || !string.Equals(SelectedNode.Type, "Project", StringComparison.OrdinalIgnoreCase)
+                || sender is not Button button || button.DataContext is not ApiCatalogEndpointEntry endpoint)
+            {
+                return;
+            }
+
+            var owner = _projectUrlCatalogEntries.FirstOrDefault(entry => entry.Endpoints.Contains(endpoint));
+            if (owner == null)
+            {
+                return;
+            }
+
+            owner.Endpoints.Remove(endpoint);
+        }
+
+        private void ApplyHttpCatalogSelectionButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(SelectedHttpCatalogBase) || string.IsNullOrWhiteSpace(SelectedHttpCatalogEndpoint))
+            {
+                MessageBox.Show("Choose both Base URL and Endpoint before applying.", "Apply Catalog", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            ApplySelectedCatalogEndpointToCurrentNode();
+        }
+
+        private void ClearHttpCatalogSelectionButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _isApplyingCatalogSelection = true;
+            try
+            {
+                SetSettingValue("CatalogBase", string.Empty);
+                SetSettingValue("CatalogEndpoint", string.Empty);
+            }
+            finally
+            {
+                _isApplyingCatalogSelection = false;
+            }
+
+            RefreshCatalogEndpointOptions();
+            OnPropertyChanged(nameof(SelectedHttpCatalogBase));
+            OnPropertyChanged(nameof(SelectedHttpCatalogEndpoint));
+        }
+
+        private void ApplyGraphQlCatalogSelectionButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(SelectedGraphQlCatalogBase) || string.IsNullOrWhiteSpace(SelectedGraphQlCatalogEndpoint))
+            {
+                MessageBox.Show("Choose both Base URL and Endpoint before applying.", "Apply Catalog", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            ApplySelectedCatalogEndpointToCurrentNode();
+        }
+
+        private void ClearGraphQlCatalogSelectionButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _isApplyingCatalogSelection = true;
+            try
+            {
+                SetSettingValue("CatalogBase", string.Empty);
+                SetSettingValue("CatalogEndpoint", string.Empty);
+            }
+            finally
+            {
+                _isApplyingCatalogSelection = false;
+            }
+
+            RefreshCatalogEndpointOptions();
+            OnPropertyChanged(nameof(SelectedGraphQlCatalogBase));
+            OnPropertyChanged(nameof(SelectedGraphQlCatalogEndpoint));
+        }
+
         private void PlanTreeView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             _dragStartPoint = e.GetPosition(null);
@@ -2612,6 +3055,7 @@ namespace Test_Automation
 
             RefreshJsonPreview();
             RefreshEnvironmentOptions();
+            RefreshApiCatalogState();
             RebuildVariableUsageMap();
         }
 
@@ -2658,6 +3102,7 @@ namespace Test_Automation
             RebuildExtractorSourceOptions();
             RefreshJsonPreview();
             RefreshEnvironmentOptions();
+            RefreshApiCatalogState();
             RebuildVariableUsageMap();
         }
 
@@ -2768,6 +3213,13 @@ namespace Test_Automation
 
                 shouldRebuildVariableMap = e.PropertyName == nameof(NodeSetting.Key)
                     || (e.PropertyName == nameof(NodeSetting.Value) && IsVariableSettingKey(changedSetting.Key));
+
+                if (ownerNode != null
+                    && string.Equals(ownerNode.Type, "Project", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(changedSetting.Key, "UrlCatalog", StringComparison.OrdinalIgnoreCase))
+                {
+                    RefreshApiCatalogState();
+                }
             }
 
             if (shouldRebuildVariableMap)
@@ -4995,6 +5447,485 @@ namespace Test_Automation
             return dictionary;
         }
 
+        private PlanNode? GetProjectNode()
+        {
+            return RootNodes.FirstOrDefault(node => string.Equals(node.Type, "Project", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private string GetProjectSettingValue(string key, string fallback)
+        {
+            var projectNode = GetProjectNode();
+            if (projectNode == null)
+            {
+                return fallback;
+            }
+
+            var setting = projectNode.Settings.FirstOrDefault(current => string.Equals(current.Key, key, StringComparison.OrdinalIgnoreCase));
+            return setting?.Value ?? fallback;
+        }
+
+        private void SetProjectSettingValue(string key, string value)
+        {
+            var projectNode = GetProjectNode();
+            if (projectNode == null)
+            {
+                return;
+            }
+
+            var setting = projectNode.Settings.FirstOrDefault(current => string.Equals(current.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (setting == null)
+            {
+                setting = new NodeSetting(key, value);
+                projectNode.Settings.Add(setting);
+            }
+            else if (!string.Equals(setting.Value, value, StringComparison.Ordinal))
+            {
+                setting.Value = value;
+            }
+
+            RefreshJsonPreview();
+        }
+
+        private void RefreshApiCatalogState()
+        {
+            if (_isSynchronizingCatalogEditor)
+            {
+                RebuildParsedApiCatalogFromEditor();
+                SyncCatalogSelectionFromCurrentNode();
+                return;
+            }
+
+            foreach (var existing in _projectUrlCatalogEntries.ToList())
+            {
+                UnregisterApiCatalogBaseEntry(existing);
+            }
+
+            _projectUrlCatalogEntries.Clear();
+
+            foreach (var entry in ParseApiCatalog(ProjectUrlCatalogJson))
+            {
+                RegisterApiCatalogBaseEntry(entry);
+                _projectUrlCatalogEntries.Add(entry);
+            }
+
+            RebuildParsedApiCatalogFromEditor();
+            OnPropertyChanged(nameof(ProjectUrlCatalogEntries));
+            OnPropertyChanged(nameof(ProjectUrlCatalogJson));
+            SyncCatalogSelectionFromCurrentNode();
+        }
+
+        private void RegisterApiCatalogBaseEntry(ApiCatalogBaseUrlEntry entry)
+        {
+            entry.PropertyChanged += ApiCatalogBaseEntry_PropertyChanged;
+            entry.Endpoints.CollectionChanged += ApiCatalogEndpoints_CollectionChanged;
+
+            foreach (var endpoint in entry.Endpoints)
+            {
+                RegisterApiCatalogEndpointEntry(endpoint);
+            }
+        }
+
+        private void UnregisterApiCatalogBaseEntry(ApiCatalogBaseUrlEntry entry)
+        {
+            entry.PropertyChanged -= ApiCatalogBaseEntry_PropertyChanged;
+            entry.Endpoints.CollectionChanged -= ApiCatalogEndpoints_CollectionChanged;
+
+            foreach (var endpoint in entry.Endpoints)
+            {
+                UnregisterApiCatalogEndpointEntry(endpoint);
+            }
+        }
+
+        private void RegisterApiCatalogEndpointEntry(ApiCatalogEndpointEntry endpoint)
+        {
+            endpoint.PropertyChanged += ApiCatalogEndpointEntry_PropertyChanged;
+        }
+
+        private void UnregisterApiCatalogEndpointEntry(ApiCatalogEndpointEntry endpoint)
+        {
+            endpoint.PropertyChanged -= ApiCatalogEndpointEntry_PropertyChanged;
+        }
+
+        private void ApiCatalogBaseEntry_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            SyncApiCatalogSettingFromEditor();
+        }
+
+        private void ApiCatalogEndpointEntry_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            SyncApiCatalogSettingFromEditor();
+        }
+
+        private void ApiCatalogEndpoints_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+            {
+                foreach (var endpoint in e.OldItems.OfType<ApiCatalogEndpointEntry>())
+                {
+                    UnregisterApiCatalogEndpointEntry(endpoint);
+                }
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var endpoint in e.NewItems.OfType<ApiCatalogEndpointEntry>())
+                {
+                    RegisterApiCatalogEndpointEntry(endpoint);
+                }
+            }
+
+            SyncApiCatalogSettingFromEditor();
+        }
+
+        private void SyncApiCatalogSettingFromEditor()
+        {
+            if (_isSynchronizingCatalogEditor)
+            {
+                return;
+            }
+
+            _isSynchronizingCatalogEditor = true;
+            try
+            {
+                RebuildParsedApiCatalogFromEditor();
+
+                var serialized = JsonSerializer.Serialize(_projectUrlCatalogEntries.Select(entry => new
+                {
+                    name = entry.Name,
+                    baseUrl = entry.BaseUrl,
+                    endpoints = entry.Endpoints.Select(endpoint => new
+                    {
+                        name = endpoint.Name,
+                        path = endpoint.Path,
+                        method = endpoint.Method,
+                        body = endpoint.Body,
+                        parameters = endpoint.Parameters,
+                        query = endpoint.Query,
+                        variables = endpoint.Variables
+                    }).ToList()
+                }).ToList(), new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+
+                SetProjectSettingValue("UrlCatalog", serialized);
+                OnPropertyChanged(nameof(ProjectUrlCatalogJson));
+                SyncCatalogSelectionFromCurrentNode();
+            }
+            finally
+            {
+                _isSynchronizingCatalogEditor = false;
+            }
+        }
+
+        private void RebuildParsedApiCatalogFromEditor()
+        {
+            _parsedApiCatalog.Clear();
+            var normalizedEntries = _projectUrlCatalogEntries
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.Name))
+                .ToList();
+
+            foreach (var entry in normalizedEntries)
+            {
+                var parsedEntry = new ApiCatalogBaseUrlEntry
+                {
+                    Name = entry.Name.Trim(),
+                    BaseUrl = entry.BaseUrl?.Trim() ?? string.Empty
+                };
+
+                foreach (var endpoint in entry.Endpoints.Where(endpoint => !string.IsNullOrWhiteSpace(endpoint.Name)))
+                {
+                    parsedEntry.Endpoints.Add(new ApiCatalogEndpointEntry
+                    {
+                        Name = endpoint.Name.Trim(),
+                        Path = endpoint.Path ?? string.Empty,
+                        Method = endpoint.Method ?? string.Empty,
+                        Body = endpoint.Body ?? string.Empty,
+                        Parameters = endpoint.Parameters ?? string.Empty,
+                        Query = endpoint.Query ?? string.Empty,
+                        Variables = endpoint.Variables ?? string.Empty
+                    });
+                }
+
+                _parsedApiCatalog.Add(parsedEntry);
+            }
+
+            _catalogBaseUrlOptions.Clear();
+            foreach (var entry in _parsedApiCatalog.OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                _catalogBaseUrlOptions.Add(entry.Name);
+            }
+
+            OnPropertyChanged(nameof(CatalogBaseUrlOptions));
+            OnPropertyChanged(nameof(CatalogEndpointOptions));
+        }
+
+        private void SyncCatalogSelectionFromCurrentNode()
+        {
+            RefreshCatalogEndpointOptions();
+            OnPropertyChanged(nameof(CatalogEndpointOptions));
+            OnPropertyChanged(nameof(SelectedHttpCatalogBase));
+            OnPropertyChanged(nameof(SelectedHttpCatalogEndpoint));
+            OnPropertyChanged(nameof(SelectedGraphQlCatalogBase));
+            OnPropertyChanged(nameof(SelectedGraphQlCatalogEndpoint));
+        }
+
+        private void RefreshCatalogEndpointOptions()
+        {
+            _catalogEndpointOptions.Clear();
+
+            var baseName = string.Empty;
+            if (string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = SelectedHttpCatalogBase;
+            }
+            else if (string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = SelectedGraphQlCatalogBase;
+            }
+
+            var baseEntry = _parsedApiCatalog.FirstOrDefault(entry => string.Equals(entry.Name, baseName, StringComparison.OrdinalIgnoreCase));
+            if (baseEntry == null)
+            {
+                return;
+            }
+
+            foreach (var endpoint in baseEntry.Endpoints.OrderBy(endpoint => endpoint.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                _catalogEndpointOptions.Add(endpoint.Name);
+            }
+
+            var selectedEndpoint = string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase)
+                ? SelectedHttpCatalogEndpoint
+                : SelectedGraphQlCatalogEndpoint;
+
+            if (_catalogEndpointOptions.Any(name => string.Equals(name, selectedEndpoint, StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            _isApplyingCatalogSelection = true;
+            try
+            {
+                if (string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase))
+                {
+                    SetSettingValue("CatalogEndpoint", string.Empty);
+                }
+                else if (string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase))
+                {
+                    SetSettingValue("CatalogEndpoint", string.Empty);
+                }
+            }
+            finally
+            {
+                _isApplyingCatalogSelection = false;
+            }
+        }
+
+        private void ApplySelectedCatalogEndpointToCurrentNode()
+        {
+            if (SelectedNode == null)
+            {
+                return;
+            }
+
+            var isHttp = string.Equals(SelectedNode.Type, "Http", StringComparison.OrdinalIgnoreCase);
+            var isGraphQl = string.Equals(SelectedNode.Type, "GraphQl", StringComparison.OrdinalIgnoreCase);
+            if (!isHttp && !isGraphQl)
+            {
+                return;
+            }
+
+            // Resolve from the latest stored project catalog to avoid stale in-memory options.
+            var latestCatalog = ParseApiCatalog(ProjectUrlCatalogJson);
+
+            var baseName = isHttp ? SelectedHttpCatalogBase : SelectedGraphQlCatalogBase;
+            var endpointName = isHttp ? SelectedHttpCatalogEndpoint : SelectedGraphQlCatalogEndpoint;
+
+            var baseEntry = latestCatalog.FirstOrDefault(entry => string.Equals(entry.Name, baseName, StringComparison.OrdinalIgnoreCase));
+            if (baseEntry == null)
+            {
+                MessageBox.Show("Selected Base URL was not found in Project URLs.", "Apply Catalog", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var endpoint = baseEntry.Endpoints.FirstOrDefault(entry => string.Equals(entry.Name, endpointName, StringComparison.OrdinalIgnoreCase));
+            if (endpoint == null)
+            {
+                MessageBox.Show("Selected Endpoint was not found under the chosen Base URL.", "Apply Catalog", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var resolvedUrl = CombineBaseUrlAndPath(baseEntry.BaseUrl, endpoint.Path);
+
+            _isApplyingCatalogSelection = true;
+            try
+            {
+                if (isHttp)
+                {
+                    HttpUrl = AppendHttpParameters(resolvedUrl, endpoint.Parameters);
+
+                    if (!string.IsNullOrWhiteSpace(endpoint.Method))
+                    {
+                        HttpMethod = endpoint.Method;
+                    }
+
+                    if (endpoint.Body != null)
+                    {
+                        HttpBody = endpoint.Body;
+                    }
+
+                    OnPropertyChanged(nameof(HttpUrl));
+                    OnPropertyChanged(nameof(HttpUrlResolved));
+                    OnPropertyChanged(nameof(HttpMethod));
+                    OnPropertyChanged(nameof(HttpBody));
+                }
+                else
+                {
+                    GraphQlEndpoint = resolvedUrl;
+
+                    if (!string.IsNullOrWhiteSpace(endpoint.Query))
+                    {
+                        GraphQlQuery = endpoint.Query;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(endpoint.Body))
+                    {
+                        GraphQlQuery = endpoint.Body;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(endpoint.Variables))
+                    {
+                        GraphQlVariables = endpoint.Variables;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(endpoint.Parameters))
+                    {
+                        GraphQlVariables = endpoint.Parameters;
+                    }
+
+                    OnPropertyChanged(nameof(GraphQlEndpoint));
+                    OnPropertyChanged(nameof(GraphQlQuery));
+                    OnPropertyChanged(nameof(GraphQlVariables));
+                }
+            }
+            finally
+            {
+                _isApplyingCatalogSelection = false;
+            }
+
+            RefreshComponentPreview();
+        }
+
+        private static string CombineBaseUrlAndPath(string baseUrl, string path)
+        {
+            var normalizedBase = (baseUrl ?? string.Empty).Trim();
+            var normalizedPath = (path ?? string.Empty).Trim();
+
+            if (string.IsNullOrWhiteSpace(normalizedPath))
+            {
+                return normalizedBase;
+            }
+
+            if (Uri.TryCreate(normalizedPath, UriKind.Absolute, out _))
+            {
+                return normalizedPath;
+            }
+
+            if (string.IsNullOrWhiteSpace(normalizedBase))
+            {
+                return normalizedPath;
+            }
+
+            return $"{normalizedBase.TrimEnd('/')}/{normalizedPath.TrimStart('/')}";
+        }
+
+        private static string AppendHttpParameters(string url, string parameters)
+        {
+            if (string.IsNullOrWhiteSpace(parameters))
+            {
+                return url;
+            }
+
+            var normalized = parameters.Trim();
+            if (normalized.StartsWith("?", StringComparison.Ordinal))
+            {
+                return $"{url}{normalized}";
+            }
+
+            var separator = url.Contains("?", StringComparison.Ordinal) ? "&" : "?";
+            return $"{url}{separator}{normalized}";
+        }
+
+        private static List<ApiCatalogBaseUrlEntry> ParseApiCatalog(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return new List<ApiCatalogBaseUrlEntry>();
+            }
+
+            try
+            {
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var array = JsonSerializer.Deserialize<List<ApiCatalogBaseUrlEntry>>(raw, options);
+                if (array != null)
+                {
+                    return NormalizeCatalog(array);
+                }
+
+                var wrapped = JsonSerializer.Deserialize<ApiCatalogWrapper>(raw, options);
+                if (wrapped?.BaseUrls != null)
+                {
+                    return NormalizeCatalog(wrapped.BaseUrls);
+                }
+            }
+            catch
+            {
+                // Invalid JSON should not block editing; options will simply be empty.
+            }
+
+            return new List<ApiCatalogBaseUrlEntry>();
+        }
+
+        private static List<ApiCatalogBaseUrlEntry> NormalizeCatalog(IEnumerable<ApiCatalogBaseUrlEntry> source)
+        {
+            return source
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.Name))
+                .Select(entry =>
+                {
+                    var normalizedEntry = new ApiCatalogBaseUrlEntry
+                    {
+                        Name = entry.Name.Trim(),
+                        BaseUrl = entry.BaseUrl?.Trim() ?? string.Empty
+                    };
+
+                    foreach (var endpoint in (entry.Endpoints ?? new ObservableCollection<ApiCatalogEndpointEntry>())
+                        .Where(endpoint => !string.IsNullOrWhiteSpace(endpoint.Name)))
+                    {
+                        normalizedEntry.Endpoints.Add(new ApiCatalogEndpointEntry
+                        {
+                            Name = endpoint.Name.Trim(),
+                            Path = endpoint.Path ?? string.Empty,
+                            Method = endpoint.Method ?? string.Empty,
+                            Body = endpoint.Body ?? string.Empty,
+                            Parameters = endpoint.Parameters ?? string.Empty,
+                            Query = endpoint.Query ?? string.Empty,
+                            Variables = endpoint.Variables ?? string.Empty
+                        });
+                    }
+
+                    return normalizedEntry;
+                })
+                .ToList();
+        }
+
+        private sealed class ApiCatalogWrapper
+        {
+            public List<ApiCatalogBaseUrlEntry> BaseUrls { get; set; } = new();
+        }
+
         private string ResolveWithProjectVariables(string template)
         {
             if (string.IsNullOrEmpty(template))
@@ -5181,6 +6112,13 @@ namespace Test_Automation
 
             OnPropertyChanged(nameof(ProjectDescription));
             OnPropertyChanged(nameof(ProjectEnvironment));
+            OnPropertyChanged(nameof(ProjectUrlCatalogJson));
+            OnPropertyChanged(nameof(CatalogBaseUrlOptions));
+            OnPropertyChanged(nameof(CatalogEndpointOptions));
+            OnPropertyChanged(nameof(SelectedHttpCatalogBase));
+            OnPropertyChanged(nameof(SelectedHttpCatalogEndpoint));
+            OnPropertyChanged(nameof(SelectedGraphQlCatalogBase));
+            OnPropertyChanged(nameof(SelectedGraphQlCatalogEndpoint));
             OnPropertyChanged(nameof(SelectedEnvironment));
             OnPropertyChanged(nameof(HttpMethod));
             OnPropertyChanged(nameof(HttpUrl));
