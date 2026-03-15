@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Test_Automation.Componentes;
 using Test_Automation.Models;
+using Test_Automation.Models.Editor;
 
 namespace Test_Automation.Services
 {
@@ -53,13 +54,18 @@ namespace Test_Automation.Services
             TraceLog($"ExecuteComponent start: {component.Name} ({component.GetType().Name}) id={component.Id}");
             ComponentStarted?.Invoke(result);
 
+            var originalSettings = component.Settings;
+            var originalExtractors = component.Extractors;
+            var originalAssertions = component.Assertions;
+
             try
             {
-                if (component.Settings != null && component.Settings.Count > 0)
-                {
-                    TraceLog($"Resolving settings for {component.Name}: {component.Settings.Count} entries.");
-                    component.Settings = ResolveSettings(component.Settings, context);
-                }
+                var settingsToResolve = originalSettings ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                TraceLog($"Resolving settings for {component.Name}: {settingsToResolve.Count} entries.");
+                component.Settings = ResolveSettings(settingsToResolve, context);
+
+                component.Extractors = ResolveExtractors(originalExtractors, context);
+                component.Assertions = ResolveAssertions(originalAssertions, context);
 
                 // Execute the component
                 var componentData = await component.Execute(context);
@@ -113,6 +119,9 @@ namespace Test_Automation.Services
             }
             finally
             {
+                component.Settings = originalSettings ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                component.Extractors = originalExtractors ?? new List<VariableExtractionRule>();
+                component.Assertions = originalAssertions ?? new List<AssertionRule>();
                 ComponentCompleted?.Invoke(result);
                 TraceLog($"ExecuteComponent end: {component.Name}. status={result.Status}, durationMs={result.DurationMs}");
             }
@@ -1138,6 +1147,56 @@ namespace Test_Automation.Services
             {
                 var value = entry.Value ?? string.Empty;
                 resolved[entry.Key] = ResolveTokens(value, context);
+            }
+
+            return resolved;
+        }
+
+        private static List<VariableExtractionRule> ResolveExtractors(List<VariableExtractionRule>? extractors, Test_Automation.Models.ExecutionContext context)
+        {
+            var resolved = new List<VariableExtractionRule>();
+            if (extractors == null || extractors.Count == 0)
+            {
+                return resolved;
+            }
+
+            foreach (var extractor in extractors)
+            {
+                if (extractor == null)
+                {
+                    continue;
+                }
+
+                resolved.Add(new VariableExtractionRule(
+                    extractor.Source ?? string.Empty,
+                    ResolveTokens(extractor.JsonPath ?? string.Empty, context),
+                    ResolveTokens(extractor.VariableName ?? string.Empty, context)));
+            }
+
+            return resolved;
+        }
+
+        private static List<AssertionRule> ResolveAssertions(List<AssertionRule>? assertions, Test_Automation.Models.ExecutionContext context)
+        {
+            var resolved = new List<AssertionRule>();
+            if (assertions == null || assertions.Count == 0)
+            {
+                return resolved;
+            }
+
+            foreach (var assertion in assertions)
+            {
+                if (assertion == null)
+                {
+                    continue;
+                }
+
+                resolved.Add(new AssertionRule(
+                    assertion.Source ?? string.Empty,
+                    ResolveTokens(assertion.JsonPath ?? string.Empty, context),
+                    assertion.Condition ?? string.Empty,
+                    ResolveTokens(assertion.Expected ?? string.Empty, context),
+                    assertion.Mode ?? "Assert"));
             }
 
             return resolved;
