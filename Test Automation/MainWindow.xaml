@@ -393,13 +393,44 @@
                                                                                     <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Path" />
                                                                                     <TextBox Grid.Column="1" Text="{Binding Path, UpdateSourceTrigger=LostFocus}" />
                                                                                 </Grid>
+                                                                                <StackPanel Margin="0,0,0,6">
+                                                                                    <Grid Margin="0,0,0,4">
+                                                                                        <Grid.ColumnDefinitions>
+                                                                                            <ColumnDefinition Width="100" />
+                                                                                            <ColumnDefinition Width="*" />
+                                                                                        </Grid.ColumnDefinitions>
+                                                                                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Parameters" />
+                                                                                        <Button Grid.Column="1" HorizontalAlignment="Left" Content="+ Add Parameter" Width="110" Click="AddEndpointParameterButton_Click" />
+                                                                                    </Grid>
+                                                                                    <ItemsControl ItemsSource="{Binding Parameters}" Margin="100,0,0,0">
+                                                                                        <ItemsControl.ItemTemplate>
+                                                                                            <DataTemplate>
+                                                                                                <Grid Margin="0,0,0,4">
+                                                                                                    <Grid.ColumnDefinitions>
+                                                                                                        <ColumnDefinition Width="*" />
+                                                                                                        <ColumnDefinition Width="8" />
+                                                                                                        <ColumnDefinition Width="*" />
+                                                                                                        <ColumnDefinition Width="Auto" />
+                                                                                                    </Grid.ColumnDefinitions>
+                                                                                                    <TextBox Grid.Column="0" Text="{Binding Key, UpdateSourceTrigger=LostFocus}" ToolTip="Parameter key" />
+                                                                                                    <TextBlock Grid.Column="1" Text="=" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                                                                                    <TextBox Grid.Column="2" Margin="0,0,4,0" Text="{Binding Value, UpdateSourceTrigger=LostFocus}" ToolTip="Parameter value" />
+                                                                                                    <Button Grid.Column="3" Content="×" Width="26" Click="RemoveEndpointParameterButton_Click" ToolTip="Remove" />
+                                                                                                </Grid>
+                                                                                            </DataTemplate>
+                                                                                        </ItemsControl.ItemTemplate>
+                                                                                    </ItemsControl>
+                                                                                </StackPanel>
                                                                                 <Grid Margin="0,0,0,6">
                                                                                     <Grid.ColumnDefinitions>
                                                                                         <ColumnDefinition Width="100" />
                                                                                         <ColumnDefinition Width="*" />
                                                                                     </Grid.ColumnDefinitions>
-                                                                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Parameters" />
-                                                                                    <TextBox Grid.Column="1" Text="{Binding Parameters, UpdateSourceTrigger=LostFocus}" ToolTip="HTTP query string or GraphQL variables fallback." />
+                                                                                    <TextBlock Grid.Column="0" VerticalAlignment="Top" Text="Headers" />
+                                                                                    <TextBox Grid.Column="1" Height="60" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                                                                                             Text="{Binding Headers, UpdateSourceTrigger=LostFocus}"
+                                                                                             FontFamily="Consolas" FontSize="11"
+                                                                                             ToolTip="HTTP headers as JSON object, e.g. {{&quot;Content-Type&quot;: &quot;application/json&quot;}}" />
                                                                                 </Grid>
                                                                                 <Grid Margin="0,0,0,6">
                                                                                     <Grid.ColumnDefinitions>

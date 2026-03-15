@@ -202,7 +202,7 @@ namespace Test_Automation
             private string _path = string.Empty;
             private string _method = string.Empty;
             private string _body = string.Empty;
-            private string _parameters = string.Empty;
+            private string _headers = string.Empty;
             private string _query = string.Empty;
             private string _variables = string.Empty;
 
@@ -250,13 +250,15 @@ namespace Test_Automation
                 }
             }
 
-            public string Parameters
+            public ObservableCollection<ApiCatalogParameterEntry> Parameters { get; set; } = new();
+
+            public string Headers
             {
-                get => _parameters;
+                get => _headers;
                 set
                 {
-                    if (_parameters == value) return;
-                    _parameters = value;
+                    if (_headers == value) return;
+                    _headers = value;
                     OnPropertyChanged();
                 }
             }
@@ -288,6 +290,97 @@ namespace Test_Automation
             private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            }
+        }
+
+        public sealed class ApiCatalogParameterEntry : INotifyPropertyChanged
+        {
+            private string _key = string.Empty;
+            private string _value = string.Empty;
+
+            public string Key
+            {
+                get => _key;
+                set
+                {
+                    if (_key == value) return;
+                    _key = value;
+                    OnPropertyChanged();
+                }
+            }
+
+            public string Value
+            {
+                get => _value;
+                set
+                {
+                    if (_value == value) return;
+                    _value = value;
+                    OnPropertyChanged();
+                }
+            }
+
+            public event PropertyChangedEventHandler? PropertyChanged;
+
+            private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            }
+        }
+
+        // Deserializes "parameters" from either legacy string form or new [{key,value}] array form.
+        private sealed class CatalogParameterCollectionConverter
+            : System.Text.Json.Serialization.JsonConverter<ObservableCollection<ApiCatalogParameterEntry>>
+        {
+            public override ObservableCollection<ApiCatalogParameterEntry> Read(
+                ref Utf8JsonReader reader,
+                Type typeToConvert,
+                JsonSerializerOptions options)
+            {
+                var result = new ObservableCollection<ApiCatalogParameterEntry>();
+                if (reader.TokenType == JsonTokenType.String)
+                {
+                    var raw = (reader.GetString() ?? string.Empty).TrimStart('?');
+                    foreach (var part in raw.Split('&', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        var eqIdx = part.IndexOf('=');
+                        result.Add(eqIdx >= 0
+                            ? new ApiCatalogParameterEntry { Key = Uri.UnescapeDataString(part[..eqIdx]), Value = Uri.UnescapeDataString(part[(eqIdx + 1)..]) }
+                            : new ApiCatalogParameterEntry { Key = Uri.UnescapeDataString(part), Value = string.Empty });
+                    }
+                    return result;
+                }
+                if (reader.TokenType == JsonTokenType.StartArray)
+                {
+                    using var doc = JsonDocument.ParseValue(ref reader);
+                    foreach (var element in doc.RootElement.EnumerateArray())
+                    {
+                        result.Add(new ApiCatalogParameterEntry
+                        {
+                            Key   = element.TryGetProperty("key",   out var k) ? k.GetString() ?? string.Empty : string.Empty,
+                            Value = element.TryGetProperty("value", out var v) ? v.GetString() ?? string.Empty : string.Empty,
+                        });
+                    }
+                    return result;
+                }
+                reader.Skip();
+                return result;
+            }
+
+            public override void Write(
+                Utf8JsonWriter writer,
+                ObservableCollection<ApiCatalogParameterEntry> value,
+                JsonSerializerOptions options)
+            {
+                writer.WriteStartArray();
+                foreach (var p in value)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("key",   p.Key   ?? string.Empty);
+                    writer.WriteString("value", p.Value ?? string.Empty);
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
             }
         }
 
@@ -508,6 +601,7 @@ namespace Test_Automation
             get => GetSettingValue("CatalogBase", string.Empty);
             set
             {
+                if ((_isApplyingCatalogSelection || _isSynchronizingCatalogEditor) && string.IsNullOrEmpty(value)) return;
                 SetSettingValue("CatalogBase", value ?? string.Empty);
                 if (_isApplyingCatalogSelection)
                 {
@@ -524,6 +618,7 @@ namespace Test_Automation
             get => GetSettingValue("CatalogEndpoint", string.Empty);
             set
             {
+                if ((_isApplyingCatalogSelection || _isSynchronizingCatalogEditor) && string.IsNullOrEmpty(value)) return;
                 SetSettingValue("CatalogEndpoint", value ?? string.Empty);
                 OnPropertyChanged();
             }
@@ -534,6 +629,7 @@ namespace Test_Automation
             get => GetSettingValue("CatalogBase", string.Empty);
             set
             {
+                if ((_isApplyingCatalogSelection || _isSynchronizingCatalogEditor) && string.IsNullOrEmpty(value)) return;
                 SetSettingValue("CatalogBase", value ?? string.Empty);
                 if (_isApplyingCatalogSelection)
                 {
@@ -550,6 +646,7 @@ namespace Test_Automation
             get => GetSettingValue("CatalogEndpoint", string.Empty);
             set
             {
+                if ((_isApplyingCatalogSelection || _isSynchronizingCatalogEditor) && string.IsNullOrEmpty(value)) return;
                 SetSettingValue("CatalogEndpoint", value ?? string.Empty);
                 OnPropertyChanged();
             }
@@ -2560,6 +2657,36 @@ namespace Test_Automation
             }
 
             owner.Endpoints.Remove(endpoint);
+        }
+
+        private void AddEndpointParameterButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { DataContext: ApiCatalogEndpointEntry endpoint })
+            {
+                return;
+            }
+
+            endpoint.Parameters.Add(new ApiCatalogParameterEntry());
+        }
+
+        private void RemoveEndpointParameterButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { DataContext: ApiCatalogParameterEntry param })
+            {
+                return;
+            }
+
+            foreach (var baseEntry in _projectUrlCatalogEntries)
+            {
+                foreach (var ep in baseEntry.Endpoints)
+                {
+                    if (ep.Parameters.Contains(param))
+                    {
+                        ep.Parameters.Remove(param);
+                        return;
+                    }
+                }
+            }
         }
 
         private void ApplyHttpCatalogSelectionButton_Click(object sender, RoutedEventArgs e)
@@ -5539,11 +5666,31 @@ namespace Test_Automation
         private void RegisterApiCatalogEndpointEntry(ApiCatalogEndpointEntry endpoint)
         {
             endpoint.PropertyChanged += ApiCatalogEndpointEntry_PropertyChanged;
+            endpoint.Parameters.CollectionChanged += ApiCatalogEndpointParameters_CollectionChanged;
+            foreach (var param in endpoint.Parameters)
+            {
+                RegisterApiCatalogParameterEntry(param);
+            }
         }
 
         private void UnregisterApiCatalogEndpointEntry(ApiCatalogEndpointEntry endpoint)
         {
             endpoint.PropertyChanged -= ApiCatalogEndpointEntry_PropertyChanged;
+            endpoint.Parameters.CollectionChanged -= ApiCatalogEndpointParameters_CollectionChanged;
+            foreach (var param in endpoint.Parameters)
+            {
+                UnregisterApiCatalogParameterEntry(param);
+            }
+        }
+
+        private void RegisterApiCatalogParameterEntry(ApiCatalogParameterEntry param)
+        {
+            param.PropertyChanged += ApiCatalogParameterEntry_PropertyChanged;
+        }
+
+        private void UnregisterApiCatalogParameterEntry(ApiCatalogParameterEntry param)
+        {
+            param.PropertyChanged -= ApiCatalogParameterEntry_PropertyChanged;
         }
 
         private void ApiCatalogBaseEntry_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -5577,6 +5724,32 @@ namespace Test_Automation
             SyncApiCatalogSettingFromEditor();
         }
 
+        private void ApiCatalogEndpointParameters_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+            {
+                foreach (var param in e.OldItems.OfType<ApiCatalogParameterEntry>())
+                {
+                    UnregisterApiCatalogParameterEntry(param);
+                }
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var param in e.NewItems.OfType<ApiCatalogParameterEntry>())
+                {
+                    RegisterApiCatalogParameterEntry(param);
+                }
+            }
+
+            SyncApiCatalogSettingFromEditor();
+        }
+
+        private void ApiCatalogParameterEntry_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            SyncApiCatalogSettingFromEditor();
+        }
+
         private void SyncApiCatalogSettingFromEditor()
         {
             if (_isSynchronizingCatalogEditor)
@@ -5599,7 +5772,8 @@ namespace Test_Automation
                         path = endpoint.Path,
                         method = endpoint.Method,
                         body = endpoint.Body,
-                        parameters = endpoint.Parameters,
+                        parameters = endpoint.Parameters.Select(p => new { key = p.Key, value = p.Value }).ToList(),
+                        headers = endpoint.Headers,
                         query = endpoint.Query,
                         variables = endpoint.Variables
                     }).ToList()
@@ -5641,7 +5815,9 @@ namespace Test_Automation
                         Path = endpoint.Path ?? string.Empty,
                         Method = endpoint.Method ?? string.Empty,
                         Body = endpoint.Body ?? string.Empty,
-                        Parameters = endpoint.Parameters ?? string.Empty,
+                        Parameters = new ObservableCollection<ApiCatalogParameterEntry>(
+                            endpoint.Parameters.Select(p => new ApiCatalogParameterEntry { Key = p.Key, Value = p.Value })),
+                        Headers = endpoint.Headers ?? string.Empty,
                         Query = endpoint.Query ?? string.Empty,
                         Variables = endpoint.Variables ?? string.Empty
                     });
@@ -5672,46 +5848,34 @@ namespace Test_Automation
 
         private void RefreshCatalogEndpointOptions()
         {
-            _catalogEndpointOptions.Clear();
-
-            var baseName = string.Empty;
-            if (string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase))
-            {
-                baseName = SelectedHttpCatalogBase;
-            }
-            else if (string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase))
-            {
-                baseName = SelectedGraphQlCatalogBase;
-            }
-
-            var baseEntry = _parsedApiCatalog.FirstOrDefault(entry => string.Equals(entry.Name, baseName, StringComparison.OrdinalIgnoreCase));
-            if (baseEntry == null)
-            {
-                return;
-            }
-
-            foreach (var endpoint in baseEntry.Endpoints.OrderBy(endpoint => endpoint.Name, StringComparer.OrdinalIgnoreCase))
-            {
-                _catalogEndpointOptions.Add(endpoint.Name);
-            }
-
-            var selectedEndpoint = string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase)
-                ? SelectedHttpCatalogEndpoint
-                : SelectedGraphQlCatalogEndpoint;
-
-            if (_catalogEndpointOptions.Any(name => string.Equals(name, selectedEndpoint, StringComparison.OrdinalIgnoreCase)))
-            {
-                return;
-            }
-
             _isApplyingCatalogSelection = true;
             try
             {
-                if (string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase))
+                _catalogEndpointOptions.Clear();
+
+                // Read directly from settings to avoid property-setter side-effects.
+                var baseName = GetSettingValue("CatalogBase", string.Empty);
+
+                var baseEntry = _parsedApiCatalog.FirstOrDefault(entry => string.Equals(entry.Name, baseName, StringComparison.OrdinalIgnoreCase));
+                if (baseEntry == null)
                 {
-                    SetSettingValue("CatalogEndpoint", string.Empty);
+                    return;
                 }
-                else if (string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase))
+
+                foreach (var endpoint in baseEntry.Endpoints.OrderBy(endpoint => endpoint.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    _catalogEndpointOptions.Add(endpoint.Name);
+                }
+
+                var selectedEndpoint = GetSettingValue("CatalogEndpoint", string.Empty);
+                if (_catalogEndpointOptions.Any(name => string.Equals(name, selectedEndpoint, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return;
+                }
+
+                // Selected endpoint is no longer valid for this base — clear it.
+                if (string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase))
                 {
                     SetSettingValue("CatalogEndpoint", string.Empty);
                 }
@@ -5775,6 +5939,12 @@ namespace Test_Automation
                         HttpBody = endpoint.Body;
                     }
 
+                    if (!string.IsNullOrWhiteSpace(endpoint.Headers))
+                    {
+                        HttpHeaders = endpoint.Headers;
+                        OnPropertyChanged(nameof(HttpHeaders));
+                    }
+
                     OnPropertyChanged(nameof(HttpUrl));
                     OnPropertyChanged(nameof(HttpUrlResolved));
                     OnPropertyChanged(nameof(HttpMethod));
@@ -5796,10 +5966,6 @@ namespace Test_Automation
                     if (!string.IsNullOrWhiteSpace(endpoint.Variables))
                     {
                         GraphQlVariables = endpoint.Variables;
-                    }
-                    else if (!string.IsNullOrWhiteSpace(endpoint.Parameters))
-                    {
-                        GraphQlVariables = endpoint.Parameters;
                     }
 
                     OnPropertyChanged(nameof(GraphQlEndpoint));
@@ -5838,21 +6004,20 @@ namespace Test_Automation
             return $"{normalizedBase.TrimEnd('/')}/{normalizedPath.TrimStart('/')}";
         }
 
-        private static string AppendHttpParameters(string url, string parameters)
+        private static string AppendHttpParameters(string url, IEnumerable<ApiCatalogParameterEntry> parameters)
         {
-            if (string.IsNullOrWhiteSpace(parameters))
+            var pairs = parameters
+                .Where(p => !string.IsNullOrWhiteSpace(p.Key))
+                .Select(p => Uri.EscapeDataString(p.Key.Trim()) + "=" + Uri.EscapeDataString(p.Value?.Trim() ?? string.Empty))
+                .ToList();
+
+            if (pairs.Count == 0)
             {
                 return url;
             }
 
-            var normalized = parameters.Trim();
-            if (normalized.StartsWith("?", StringComparison.Ordinal))
-            {
-                return $"{url}{normalized}";
-            }
-
             var separator = url.Contains("?", StringComparison.Ordinal) ? "&" : "?";
-            return $"{url}{separator}{normalized}";
+            return url + separator + string.Join("&", pairs);
         }
 
         private static List<ApiCatalogBaseUrlEntry> ParseApiCatalog(string raw)
@@ -5866,7 +6031,8 @@ namespace Test_Automation
             {
                 var options = new JsonSerializerOptions
                 {
-                    PropertyNameCaseInsensitive = true
+                    PropertyNameCaseInsensitive = true,
+                    Converters = { new CatalogParameterCollectionConverter() }
                 };
 
                 var array = JsonSerializer.Deserialize<List<ApiCatalogBaseUrlEntry>>(raw, options);
@@ -5910,7 +6076,10 @@ namespace Test_Automation
                             Path = endpoint.Path ?? string.Empty,
                             Method = endpoint.Method ?? string.Empty,
                             Body = endpoint.Body ?? string.Empty,
-                            Parameters = endpoint.Parameters ?? string.Empty,
+                            Parameters = new ObservableCollection<ApiCatalogParameterEntry>(
+                                (endpoint.Parameters ?? new ObservableCollection<ApiCatalogParameterEntry>())
+                                .Select(p => new ApiCatalogParameterEntry { Key = p.Key, Value = p.Value })),
+                            Headers = endpoint.Headers ?? string.Empty,
                             Query = endpoint.Query ?? string.Empty,
                             Variables = endpoint.Variables ?? string.Empty
                         });
