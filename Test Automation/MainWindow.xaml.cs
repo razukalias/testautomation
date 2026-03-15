@@ -2908,6 +2908,8 @@ namespace Test_Automation
                     .Select(result => new
                     {
                         threadIndex = result.ThreadIndex,
+                        startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                        endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                         durationMs = result.DurationMs,
                         status = result.Status,
                         method = (result.Data as HttpData)?.Method,
@@ -2921,6 +2923,8 @@ namespace Test_Automation
                     .Select(result => new
                     {
                         threadIndex = result.ThreadIndex,
+                        startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                        endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                         durationMs = result.DurationMs,
                         status = result.Status,
                         responseStatus = (result.Data as HttpData)?.ResponseStatus,
@@ -3077,6 +3081,8 @@ namespace Test_Automation
                     .Select(result => new
                     {
                         threadIndex = result.ThreadIndex,
+                        startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                        endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                         durationMs = result.DurationMs,
                         status = result.Status,
                         endpoint = (result.Data as GraphQlData)?.Endpoint,
@@ -3090,6 +3096,8 @@ namespace Test_Automation
                     .Select(result => new
                     {
                         threadIndex = result.ThreadIndex,
+                        startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                        endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                         durationMs = result.DurationMs,
                         status = result.Status,
                         responseStatus = (result.Data as GraphQlData)?.ResponseStatus,
@@ -3188,6 +3196,8 @@ namespace Test_Automation
                     .Select(result => new
                     {
                         threadIndex = result.ThreadIndex,
+                        startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                        endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                         durationMs = result.DurationMs,
                         status = result.Status,
                         connection = (result.Data as SqlData)?.ConnectionString,
@@ -3199,6 +3209,8 @@ namespace Test_Automation
                     .Select(result => new
                     {
                         threadIndex = result.ThreadIndex,
+                        startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                        endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                         durationMs = result.DurationMs,
                         status = result.Status,
                         rows = (result.Data as SqlData)?.QueryResult
@@ -3294,6 +3306,8 @@ namespace Test_Automation
                     {
                         name = result.ComponentName,
                         threadIndex = result.ThreadIndex,
+                        startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                        endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                         durationMs = result.DurationMs,
                         status = result.Status,
                         passed = result.Passed,
@@ -3334,6 +3348,8 @@ namespace Test_Automation
                     .Select(result => new
                     {
                         threadIndex = result.ThreadIndex,
+                        startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                        endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                         durationMs = result.DurationMs,
                         status = result.Status,
                         language = (result.Data as ScriptData)?.ScriptLanguage,
@@ -3344,6 +3360,8 @@ namespace Test_Automation
                     .Select(result => new
                     {
                         threadIndex = result.ThreadIndex,
+                        startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                        endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                         durationMs = result.DurationMs,
                         status = result.Status,
                         output = (result.Data as ScriptData)?.ExecutionResult,
@@ -3427,6 +3445,8 @@ namespace Test_Automation
                 .Select(result => new
                 {
                     threadIndex = result.ThreadIndex,
+                    startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                    endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                     durationMs = result.DurationMs,
                     status = result.Status,
                     error = result.Error,
@@ -3542,6 +3562,8 @@ namespace Test_Automation
                         latestStatus = latest.Status,
                         latestDurationMs = latest.DurationMs,
                         latestThreadIndex = latest.ThreadIndex,
+                        latestStartTime = latest.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                        latestEndTime = latest.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                         latestError = string.IsNullOrWhiteSpace(latest.Error) ? null : latest.Error,
                         assertionSummary = new
                         {
@@ -3563,6 +3585,8 @@ namespace Test_Automation
                     componentName = result.ComponentName,
                     componentType = FindNodeById(result.ComponentId)?.Type ?? "Unknown",
                     threadIndex = result.ThreadIndex,
+                    startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                    endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                     status = result.Status,
                     durationMs = result.DurationMs,
                     request = BuildComponentRequestSnapshot(result.Data)
@@ -3576,6 +3600,8 @@ namespace Test_Automation
                     componentName = result.ComponentName,
                     componentType = FindNodeById(result.ComponentId)?.Type ?? "Unknown",
                     threadIndex = result.ThreadIndex,
+                    startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                    endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                     status = result.Status,
                     passed = result.Passed,
                     durationMs = result.DurationMs,
@@ -3686,6 +3712,8 @@ namespace Test_Automation
                     componentName = result.ComponentName,
                     componentType = FindNodeById(result.ComponentId)?.Type ?? "Unknown",
                     threadIndex = result.ThreadIndex,
+                    startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                    endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                     status = result.Status,
                     durationMs = result.DurationMs,
                     request = BuildComponentRequestSnapshot(result.Data)
@@ -3720,11 +3748,15 @@ namespace Test_Automation
                                 componentType = FindNodeById(group.Key.ComponentId)?.Type ?? "Unknown",
                                 latestStatus = latest.Status,
                                 latestThreadIndex = latest.ThreadIndex,
+                                latestStartTime = latest.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                                latestEndTime = latest.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                                 latestDurationMs = latest.DurationMs,
                                 latestRequest = BuildComponentRequestSnapshot(latest.Data),
                                 runs = group.Select(result => new
                                 {
                                     threadIndex = result.ThreadIndex,
+                                    startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                                    endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                                     status = result.Status,
                                     durationMs = result.DurationMs,
                                     request = BuildComponentRequestSnapshot(result.Data)
@@ -3758,6 +3790,8 @@ namespace Test_Automation
                     componentName = result.ComponentName,
                     componentType = FindNodeById(result.ComponentId)?.Type ?? "Unknown",
                     threadIndex = result.ThreadIndex,
+                    startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                    endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                     status = result.Status,
                     passed = result.Passed,
                     durationMs = result.DurationMs,
@@ -3797,6 +3831,8 @@ namespace Test_Automation
                                 latestStatus = latest.Status,
                                 latestDurationMs = latest.DurationMs,
                                 latestThreadIndex = latest.ThreadIndex,
+                                latestStartTime = latest.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                                latestEndTime = latest.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                                 latestError = string.IsNullOrWhiteSpace(latest.Error) ? null : latest.Error,
                                 assertionSummary = new
                                 {
@@ -3869,11 +3905,15 @@ namespace Test_Automation
                                 latestPassed = latest.Passed,
                                 latestDurationMs = latest.DurationMs,
                                 latestThreadIndex = latest.ThreadIndex,
+                                latestStartTime = latest.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                                latestEndTime = latest.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                                 latestError = string.IsNullOrWhiteSpace(latest.Error) ? null : latest.Error,
                                 latestResponse = BuildComponentResponseSnapshot(latest.Data),
                                 runs = group.Select(result => new
                                 {
                                     threadIndex = result.ThreadIndex,
+                                    startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                                    endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                                     status = result.Status,
                                     passed = result.Passed,
                                     durationMs = result.DurationMs,
@@ -4018,7 +4058,9 @@ namespace Test_Automation
                 {
                     componentId = result.ComponentId,
                     componentName = result.ComponentName,
-                    threadIndex = result.ThreadIndex,
+                        threadIndex = result.ThreadIndex,
+                        startTime = result.StartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                        endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                     componentStatus = result.Status,
                     passed = assertion.Passed,
                     mode = assertion.Mode,
