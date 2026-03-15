@@ -1,4 +1,4 @@
-﻿<Window x:Class="Test_Automation.MainWindow"
+<Window x:Class="Test_Automation.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -326,44 +326,58 @@
                             </TabItem>
 
                             <TabItem Header="Preview">
-                                <TabControl Margin="8">
-                                    <TabItem Header="Flow JSON">
-                                        <TextBox Text="{Binding JsonPreview}"
-                                                 FontFamily="Consolas"
-                                                 FontSize="12"
-                                                 AcceptsReturn="True"
-                                                 VerticalScrollBarVisibility="Auto"
-                                                 HorizontalScrollBarVisibility="Auto"
-                                                 IsReadOnly="True" />
-                                    </TabItem>
-                                    <TabItem Header="Variables">
-                                        <TextBox Text="{Binding VariablesPreview}"
-                                                 FontFamily="Consolas"
-                                                 FontSize="12"
-                                                 AcceptsReturn="True"
-                                                 VerticalScrollBarVisibility="Auto"
-                                                 HorizontalScrollBarVisibility="Auto"
-                                                 IsReadOnly="True" />
-                                    </TabItem>
-                                    <TabItem Header="Logs">
-                                        <TextBox Text="{Binding PreviewLogs}"
-                                                 FontFamily="Consolas"
-                                                 FontSize="12"
-                                                 AcceptsReturn="True"
-                                                 VerticalScrollBarVisibility="Auto"
-                                                 HorizontalScrollBarVisibility="Auto"
-                                                 IsReadOnly="True" />
-                                    </TabItem>
-                                    <TabItem Header="Assertions">
-                                        <TextBox Text="{Binding AssertionPreview}"
-                                                 FontFamily="Consolas"
-                                                 FontSize="12"
-                                                 AcceptsReturn="True"
-                                                 VerticalScrollBarVisibility="Auto"
-                                                 HorizontalScrollBarVisibility="Auto"
-                                                 IsReadOnly="True" />
-                                    </TabItem>
-                                </TabControl>
+                                <Grid Margin="8">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <TextBlock VerticalAlignment="Center" Text="Preview Data" Margin="0,0,8,0" />
+                                        <ComboBox Width="140"
+                                                  ItemsSource="{Binding PreviewDataModeOptions}"
+                                                  SelectedItem="{Binding SelectedPreviewDataMode, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+
+                                    <TabControl Grid.Row="1">
+                                        <TabItem Header="Flow JSON">
+                                            <TextBox Text="{Binding JsonPreview}"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Variables">
+                                            <TextBox Text="{Binding VariablesPreview}"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Logs">
+                                            <TextBox Text="{Binding PreviewLogs}"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     IsReadOnly="True" />
+                                        </TabItem>
+                                        <TabItem Header="Assertions">
+                                            <TextBox Text="{Binding AssertionPreview}"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     IsReadOnly="True" />
+                                        </TabItem>
+                                    </TabControl>
+                                </Grid>
                             </TabItem>
                         </TabControl>
                     </Border>
@@ -1217,113 +1231,127 @@
                                 </TabItem>
 
                                 <TabItem Header="Preview">
-                                    <TabControl Margin="8" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
-                                        <TabItem Header="Request">
-                                            <TextBox Text="{Binding PreviewRequest}"
-                                                     FontFamily="Consolas"
-                                                     FontSize="12"
-                                                     AcceptsReturn="True"
-                                                     VerticalScrollBarVisibility="Auto"
-                                                     HorizontalScrollBarVisibility="Auto"
-                                                     IsReadOnly="True" />
-                                        </TabItem>
-                                        <TabItem Header="Response">
-                                            <TextBox Text="{Binding PreviewResponse}"
-                                                     FontFamily="Consolas"
-                                                     FontSize="12"
-                                                     AcceptsReturn="True"
-                                                     VerticalScrollBarVisibility="Auto"
-                                                     HorizontalScrollBarVisibility="Auto"
-                                                     IsReadOnly="True" />
-                                        </TabItem>
-                                        <TabItem Header="Logs">
-                                            <TextBox Text="{Binding PreviewLogs}"
-                                                     FontFamily="Consolas"
-                                                     FontSize="12"
-                                                     AcceptsReturn="True"
-                                                     VerticalScrollBarVisibility="Auto"
-                                                     HorizontalScrollBarVisibility="Auto"
-                                                     IsReadOnly="True" />
-                                        </TabItem>
-                                        <TabItem Header="Variables">
-                                            <TextBox Text="{Binding VariablesPreview}"
-                                                     FontFamily="Consolas"
-                                                     FontSize="12"
-                                                     AcceptsReturn="True"
-                                                     VerticalScrollBarVisibility="Auto"
-                                                     HorizontalScrollBarVisibility="Auto"
-                                                     IsReadOnly="True" />
-                                        </TabItem>
-                                        <TabItem Header="Assertions">
-                                            <TextBox Text="{Binding AssertionPreview}"
-                                                     FontFamily="Consolas"
-                                                     FontSize="12"
-                                                     AcceptsReturn="True"
-                                                     VerticalScrollBarVisibility="Auto"
-                                                     HorizontalScrollBarVisibility="Auto"
-                                                     IsReadOnly="True" />
-                                        </TabItem>
-                                        <TabItem Header="Req Headers"
-                                                 Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <TextBox Text="{Binding HttpRequestHeadersPreview}"
-                                                     FontFamily="Consolas"
-                                                     FontSize="12"
-                                                     AcceptsReturn="True"
-                                                     VerticalScrollBarVisibility="Auto"
-                                                     HorizontalScrollBarVisibility="Auto"
-                                                     IsReadOnly="True" />
-                                        </TabItem>
-                                        <TabItem Header="Req Cookies"
-                                                Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <TextBox Text="{Binding HttpRequestCookiesPreview}"
-                                                   FontFamily="Consolas"
-                                                   FontSize="12"
-                                                   AcceptsReturn="True"
-                                                   VerticalScrollBarVisibility="Auto"
-                                                   HorizontalScrollBarVisibility="Auto"
-                                                   IsReadOnly="True" />
-                                        </TabItem>
-                                        <TabItem Header="Req Metadata"
-                                                Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <TextBox Text="{Binding HttpRequestMetadataPreview}"
-                                                   FontFamily="Consolas"
-                                                   FontSize="12"
-                                                   AcceptsReturn="True"
-                                                   VerticalScrollBarVisibility="Auto"
-                                                   HorizontalScrollBarVisibility="Auto"
-                                                   IsReadOnly="True" />
-                                        </TabItem>
-                                        <TabItem Header="Res Headers"
-                                                 Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <TextBox Text="{Binding HttpResponseHeadersPreview}"
-                                                     FontFamily="Consolas"
-                                                     FontSize="12"
-                                                     AcceptsReturn="True"
-                                                     VerticalScrollBarVisibility="Auto"
-                                                     HorizontalScrollBarVisibility="Auto"
-                                                     IsReadOnly="True" />
-                                        </TabItem>
-                                        <TabItem Header="Res Cookies"
-                                                Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <TextBox Text="{Binding HttpResponseCookiesPreview}"
-                                                   FontFamily="Consolas"
-                                                   FontSize="12"
-                                                   AcceptsReturn="True"
-                                                   VerticalScrollBarVisibility="Auto"
-                                                   HorizontalScrollBarVisibility="Auto"
-                                                   IsReadOnly="True" />
-                                        </TabItem>
-                                        <TabItem Header="Res Metadata"
-                                                Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <TextBox Text="{Binding HttpResponseMetadataPreview}"
-                                                   FontFamily="Consolas"
-                                                   FontSize="12"
-                                                   AcceptsReturn="True"
-                                                   VerticalScrollBarVisibility="Auto"
-                                                   HorizontalScrollBarVisibility="Auto"
-                                                   IsReadOnly="True" />
-                                        </TabItem>
-                                    </TabControl>
+                                    <Grid Margin="8">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                            <TextBlock VerticalAlignment="Center" Text="Preview Data" Margin="0,0,8,0" />
+                                            <ComboBox Width="140"
+                                                      ItemsSource="{Binding PreviewDataModeOptions}"
+                                                      SelectedItem="{Binding SelectedPreviewDataMode, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+
+                                        <TabControl Grid.Row="1" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                                            <TabItem Header="Request">
+                                                <TextBox Text="{Binding PreviewRequest}"
+                                                         FontFamily="Consolas"
+                                                         FontSize="12"
+                                                         AcceptsReturn="True"
+                                                         VerticalScrollBarVisibility="Auto"
+                                                         HorizontalScrollBarVisibility="Auto"
+                                                         IsReadOnly="True" />
+                                            </TabItem>
+                                            <TabItem Header="Response">
+                                                <TextBox Text="{Binding PreviewResponse}"
+                                                         FontFamily="Consolas"
+                                                         FontSize="12"
+                                                         AcceptsReturn="True"
+                                                         VerticalScrollBarVisibility="Auto"
+                                                         HorizontalScrollBarVisibility="Auto"
+                                                         IsReadOnly="True" />
+                                            </TabItem>
+                                            <TabItem Header="Logs">
+                                                <TextBox Text="{Binding PreviewLogs}"
+                                                         FontFamily="Consolas"
+                                                         FontSize="12"
+                                                         AcceptsReturn="True"
+                                                         VerticalScrollBarVisibility="Auto"
+                                                         HorizontalScrollBarVisibility="Auto"
+                                                         IsReadOnly="True" />
+                                            </TabItem>
+                                            <TabItem Header="Variables">
+                                                <TextBox Text="{Binding VariablesPreview}"
+                                                         FontFamily="Consolas"
+                                                         FontSize="12"
+                                                         AcceptsReturn="True"
+                                                         VerticalScrollBarVisibility="Auto"
+                                                         HorizontalScrollBarVisibility="Auto"
+                                                         IsReadOnly="True" />
+                                            </TabItem>
+                                            <TabItem Header="Assertions">
+                                                <TextBox Text="{Binding AssertionPreview}"
+                                                         FontFamily="Consolas"
+                                                         FontSize="12"
+                                                         AcceptsReturn="True"
+                                                         VerticalScrollBarVisibility="Auto"
+                                                         HorizontalScrollBarVisibility="Auto"
+                                                         IsReadOnly="True" />
+                                            </TabItem>
+                                            <TabItem Header="Req Headers"
+                                                     Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBox Text="{Binding HttpRequestHeadersPreview}"
+                                                         FontFamily="Consolas"
+                                                         FontSize="12"
+                                                         AcceptsReturn="True"
+                                                         VerticalScrollBarVisibility="Auto"
+                                                         HorizontalScrollBarVisibility="Auto"
+                                                         IsReadOnly="True" />
+                                            </TabItem>
+                                            <TabItem Header="Req Cookies"
+                                                    Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBox Text="{Binding HttpRequestCookiesPreview}"
+                                                       FontFamily="Consolas"
+                                                       FontSize="12"
+                                                       AcceptsReturn="True"
+                                                       VerticalScrollBarVisibility="Auto"
+                                                       HorizontalScrollBarVisibility="Auto"
+                                                       IsReadOnly="True" />
+                                            </TabItem>
+                                            <TabItem Header="Req Metadata"
+                                                    Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBox Text="{Binding HttpRequestMetadataPreview}"
+                                                       FontFamily="Consolas"
+                                                       FontSize="12"
+                                                       AcceptsReturn="True"
+                                                       VerticalScrollBarVisibility="Auto"
+                                                       HorizontalScrollBarVisibility="Auto"
+                                                       IsReadOnly="True" />
+                                            </TabItem>
+                                            <TabItem Header="Res Headers"
+                                                     Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBox Text="{Binding HttpResponseHeadersPreview}"
+                                                         FontFamily="Consolas"
+                                                         FontSize="12"
+                                                         AcceptsReturn="True"
+                                                         VerticalScrollBarVisibility="Auto"
+                                                         HorizontalScrollBarVisibility="Auto"
+                                                         IsReadOnly="True" />
+                                            </TabItem>
+                                            <TabItem Header="Res Cookies"
+                                                    Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBox Text="{Binding HttpResponseCookiesPreview}"
+                                                       FontFamily="Consolas"
+                                                       FontSize="12"
+                                                       AcceptsReturn="True"
+                                                       VerticalScrollBarVisibility="Auto"
+                                                       HorizontalScrollBarVisibility="Auto"
+                                                       IsReadOnly="True" />
+                                            </TabItem>
+                                            <TabItem Header="Res Metadata"
+                                                    Visibility="{Binding IsHttpSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBox Text="{Binding HttpResponseMetadataPreview}"
+                                                       FontFamily="Consolas"
+                                                       FontSize="12"
+                                                       AcceptsReturn="True"
+                                                       VerticalScrollBarVisibility="Auto"
+                                                       HorizontalScrollBarVisibility="Auto"
+                                                       IsReadOnly="True" />
+                                            </TabItem>
+                                        </TabControl>
+                                    </Grid>
                                 </TabItem>
                             </TabControl>
                     </Border>

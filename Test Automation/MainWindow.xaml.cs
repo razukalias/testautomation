@@ -90,6 +90,12 @@ namespace Test_Automation
             "Parallel"
         };
 
+        public ObservableCollection<string> PreviewDataModeOptions { get; } = new ObservableCollection<string>
+        {
+            "Last Run",
+            "Full History"
+        };
+
         private PlanNode? _selectedNode;
         private string _selectedEnvironment = string.Empty;
         private string _selectedTraceLevel = "Verbose";
@@ -117,6 +123,7 @@ namespace Test_Automation
         private readonly List<Test_Automation.Models.ExecutionContext> _activeProjectExecutionContexts = new();
         private bool _isRunInProgress;
         private string _selectedProjectRunMode = "Sequence";
+        private string _selectedPreviewDataMode = "Last Run";
         private bool _isApplyingMainLayoutBounds;
         private static readonly string MainLayoutStatePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -386,6 +393,50 @@ namespace Test_Automation
                 _selectedProjectRunMode = normalized;
                 OnPropertyChanged();
             }
+        }
+
+        public string SelectedPreviewDataMode
+        {
+            get => _selectedPreviewDataMode;
+            set
+            {
+                var normalized = PreviewDataModeOptions.Contains(value) ? value : "Last Run";
+                if (string.Equals(_selectedPreviewDataMode, normalized, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _selectedPreviewDataMode = normalized;
+                OnPropertyChanged();
+                RefreshComponentPreview();
+            }
+        }
+
+        private bool IsFullPreviewHistoryMode => string.Equals(SelectedPreviewDataMode, "Full History", StringComparison.OrdinalIgnoreCase);
+
+        private List<ExecutionResult> FilterPreviewResults(IEnumerable<ExecutionResult> source, bool lastPerComponent)
+        {
+            var ordered = source
+                .OrderBy(result => result.EndTime ?? result.StartTime)
+                .ToList();
+
+            if (IsFullPreviewHistoryMode || ordered.Count == 0)
+            {
+                return ordered;
+            }
+
+            if (!lastPerComponent)
+            {
+                return new List<ExecutionResult> { ordered[^1] };
+            }
+
+            return ordered
+                .GroupBy(result => result.ComponentId, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group
+                    .OrderByDescending(result => result.EndTime ?? result.StartTime)
+                    .First())
+                .OrderBy(result => result.EndTime ?? result.StartTime)
+                .ToList();
         }
 
         public string HttpMethod
@@ -2822,6 +2873,7 @@ namespace Test_Automation
             var nodeId = SelectedNode.Id;
             var nodeName = SelectedNode.Name;
             var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            var nodeExecutionResults = FilterPreviewResults(GetExecutionResults(nodeId), lastPerComponent: false);
 
             if (!string.Equals(nodeType, "Http", StringComparison.OrdinalIgnoreCase))
             {
@@ -2840,18 +2892,18 @@ namespace Test_Automation
                 return;
             }
 
-            var scopedResults = GetExecutionResultsForScope(SelectedNode);
+            var scopedResults = FilterPreviewResults(GetExecutionResultsForScope(SelectedNode), lastPerComponent: true);
             SetAssertionPreview(nodeType, nodeName, scopedResults);
 
             if (nodeType == "Http")
             {
                 var method = GetSettingValue("Method", "GET");
                 var url = ResolveWithProjectVariables(GetSettingValue("Url", "https://api.example.com"));
-                var latestHttpExecution = GetExecutionResults(nodeId)
+                var latestHttpExecution = nodeExecutionResults
                     .OrderByDescending(result => result.EndTime ?? result.StartTime)
                     .FirstOrDefault();
                 var lastHttp = GetLastExecutionData<HttpData>(nodeId);
-                var httpRequestRuns = GetExecutionResults(nodeId)
+                var httpRequestRuns = nodeExecutionResults
                     .Where(result => result.Data is HttpData)
                     .Select(result => new
                     {
@@ -2864,7 +2916,7 @@ namespace Test_Automation
                         body = (result.Data as HttpData)?.Body
                     })
                     .ToList();
-                var httpRuns = GetExecutionResults(nodeId)
+                var httpRuns = nodeExecutionResults
                     .Where(result => result.Data is HttpData)
                     .Select(result => new
                     {
@@ -3016,11 +3068,11 @@ namespace Test_Automation
                 var endpoint = GetSettingValue("Endpoint", "https://api.example.com/graphql");
                 var query = GetSettingValue("Query", "query { health }");
                 var variables = GetSettingValue("Variables", "{}");
-                var latestGraphExecution = GetExecutionResults(nodeId)
+                var latestGraphExecution = nodeExecutionResults
                     .OrderByDescending(result => result.EndTime ?? result.StartTime)
                     .FirstOrDefault();
                 var lastGraphQl = GetLastExecutionData<GraphQlData>(nodeId);
-                var graphRequestRuns = GetExecutionResults(nodeId)
+                var graphRequestRuns = nodeExecutionResults
                     .Where(result => result.Data is GraphQlData)
                     .Select(result => new
                     {
@@ -3033,7 +3085,7 @@ namespace Test_Automation
                         headers = (result.Data as GraphQlData)?.Headers
                     })
                     .ToList();
-                var graphRuns = GetExecutionResults(nodeId)
+                var graphRuns = nodeExecutionResults
                     .Where(result => result.Data is GraphQlData)
                     .Select(result => new
                     {
@@ -3127,11 +3179,11 @@ namespace Test_Automation
             {
                 var connection = GetSettingValue("Connection", "Server=.;Database=master;Trusted_Connection=True;");
                 var query = GetSettingValue("Query", "SELECT 1");
-                var latestSqlExecution = GetExecutionResults(nodeId)
+                var latestSqlExecution = nodeExecutionResults
                     .OrderByDescending(result => result.EndTime ?? result.StartTime)
                     .FirstOrDefault();
                 var lastSql = GetLastExecutionData<SqlData>(nodeId);
-                var sqlRequestRuns = GetExecutionResults(nodeId)
+                var sqlRequestRuns = nodeExecutionResults
                     .Where(result => result.Data is SqlData)
                     .Select(result => new
                     {
@@ -3142,7 +3194,7 @@ namespace Test_Automation
                         query = (result.Data as SqlData)?.Query
                     })
                     .ToList();
-                var sqlRuns = GetExecutionResults(nodeId)
+                var sqlRuns = nodeExecutionResults
                     .Where(result => result.Data is SqlData)
                     .Select(result => new
                     {
@@ -3235,8 +3287,9 @@ namespace Test_Automation
                 var threadCount = GetSettingValue("ThreadCount", "1");
                 var rampUp = GetSettingValue("RampUpSeconds", "1");
                 var childIds = GetDescendantIds(SelectedNode).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var lastResults = _lastExecutionContext?.Results
+                var lastResults = FilterPreviewResults((_lastExecutionContext?.Results ?? new List<ExecutionResult>())
                     .Where(result => childIds.Contains(result.ComponentId))
+                    , lastPerComponent: true)
                     .Select(result => (object)new
                     {
                         name = result.ComponentName,
@@ -3247,7 +3300,7 @@ namespace Test_Automation
                         error = result.Error,
                         data = result.Data
                     })
-                    .ToList() ?? new List<object>();
+                    .ToList();
 
                 PreviewRequest = JsonSerializer.Serialize(new
                 {
@@ -3274,10 +3327,10 @@ namespace Test_Automation
             {
                 var language = GetSettingValue("Language", "CSharp");
                 var code = GetSettingValue("Code", string.Empty);
-                var latestScriptExecution = GetExecutionResults(nodeId)
+                var latestScriptExecution = nodeExecutionResults
                     .OrderByDescending(result => result.EndTime ?? result.StartTime)
                     .FirstOrDefault();
-                var scriptRequestRuns = GetExecutionResults(nodeId)
+                var scriptRequestRuns = nodeExecutionResults
                     .Select(result => new
                     {
                         threadIndex = result.ThreadIndex,
@@ -3287,7 +3340,7 @@ namespace Test_Automation
                         code = (result.Data as ScriptData)?.ScriptCode
                     })
                     .ToList();
-                var scriptRuns = GetExecutionResults(nodeId)
+                var scriptRuns = nodeExecutionResults
                     .Select(result => new
                     {
                         threadIndex = result.ThreadIndex,
@@ -3370,7 +3423,7 @@ namespace Test_Automation
                 .Where(setting => !string.IsNullOrWhiteSpace(setting.Key))
                 .ToDictionary(setting => setting.Key, setting => setting.Value);
 
-            var genericRuns = GetExecutionResults(nodeId)
+            var genericRuns = nodeExecutionResults
                 .Select(result => new
                 {
                     threadIndex = result.ThreadIndex,
@@ -3380,7 +3433,7 @@ namespace Test_Automation
                     data = result.Data
                 })
                 .ToList();
-            var latestGenericExecution = GetExecutionResults(nodeId)
+            var latestGenericExecution = nodeExecutionResults
                 .OrderByDescending(result => result.EndTime ?? result.StartTime)
                 .FirstOrDefault();
 
@@ -3461,10 +3514,12 @@ namespace Test_Automation
                 .Append(testPlanNode.Id)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            var planResults = (_lastExecutionContext?.Results ?? new List<ExecutionResult>())
+            var allPlanResults = (_lastExecutionContext?.Results ?? new List<ExecutionResult>())
                 .Where(result => componentIds.Contains(result.ComponentId))
                 .OrderBy(result => result.StartTime)
                 .ToList();
+
+            var planResults = FilterPreviewResults(allPlanResults, lastPerComponent: true);
 
             SetAssertionPreview("TestPlan", nodeName, planResults);
 
@@ -3620,10 +3675,11 @@ namespace Test_Automation
                 .ToList();
 
             var allResults = _lastExecutionContext?.Results ?? new List<ExecutionResult>();
-            var projectAssertionSummary = BuildAssertionSummary(allResults);
-            SetAssertionPreview("Project", nodeName, allResults);
+            var previewResults = FilterPreviewResults(allResults, lastPerComponent: true);
+            var projectAssertionSummary = BuildAssertionSummary(previewResults);
+            SetAssertionPreview("Project", nodeName, previewResults);
 
-            var requestRuns = allResults
+            var requestRuns = previewResults
                 .Select(result => new
                 {
                     componentId = result.ComponentId,
@@ -3647,6 +3703,7 @@ namespace Test_Automation
                         .Where(result => componentIds.Contains(result.ComponentId))
                         .OrderBy(result => result.StartTime)
                         .ToList();
+                    planResults = FilterPreviewResults(planResults, lastPerComponent: true);
 
                     var componentRequests = planResults
                         .GroupBy(result => new { result.ComponentId, result.ComponentName })
@@ -3694,7 +3751,7 @@ namespace Test_Automation
                 })
                 .ToList();
 
-            var responseRuns = allResults
+            var responseRuns = previewResults
                 .Select(result => new
                 {
                     componentId = result.ComponentId,
@@ -3720,6 +3777,7 @@ namespace Test_Automation
                         .Where(result => componentIds.Contains(result.ComponentId))
                         .OrderBy(result => result.StartTime)
                         .ToList();
+                    planResults = FilterPreviewResults(planResults, lastPerComponent: true);
 
                     var componentRuns = planResults
                         .GroupBy(result => new { result.ComponentId, result.ComponentName })
@@ -3792,6 +3850,7 @@ namespace Test_Automation
                         .Where(result => componentIds.Contains(result.ComponentId))
                         .OrderBy(result => result.StartTime)
                         .ToList();
+                    planResults = FilterPreviewResults(planResults, lastPerComponent: true);
 
                     var componentResponses = planResults
                         .GroupBy(result => new { result.ComponentId, result.ComponentName })
@@ -3867,9 +3926,10 @@ namespace Test_Automation
                 {
                     environment = SelectedEnvironment,
                     runMode = SelectedProjectRunMode,
+                    previewDataMode = SelectedPreviewDataMode,
                     testPlanCount = testPlanNodes.Count,
                     plannedComponents = GetDescendantIds(projectNode).Count(),
-                    executedComponents = allResults.Select(result => result.ComponentId).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                    executedComponents = previewResults.Select(result => result.ComponentId).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
                     totalRuns = requestRuns.Count
                 },
                 testPlans = testPlanRequests
@@ -3881,15 +3941,15 @@ namespace Test_Automation
                 summary = new
                 {
                     executedTestPlans = testPlanExecutions.Count(plan => !string.Equals(plan.status, "not-run", StringComparison.OrdinalIgnoreCase)),
-                    executedComponents = allResults.Select(result => result.ComponentId).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
-                    totalRuns = allResults.Count,
-                    passedRuns = allResults.Count(result => result.Passed),
-                    failedRuns = allResults.Count(result => !result.Passed)
+                    executedComponents = previewResults.Select(result => result.ComponentId).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                    totalRuns = previewResults.Count,
+                    passedRuns = previewResults.Count(result => result.Passed),
+                    failedRuns = previewResults.Count(result => !result.Passed)
                 },
                 testPlans = testPlanResponses
             }, new JsonSerializerOptions { WriteIndented = true });
 
-            if (allResults.Count == 0)
+            if (previewResults.Count == 0)
             {
                 PreviewLogs = string.Join("\n", new[]
                 {
@@ -3903,7 +3963,7 @@ namespace Test_Automation
             var logLines = new List<string>
             {
                 $"[{timestamp}] Project preview refreshed.",
-                $"[{timestamp}] TestPlans: {testPlanNodes.Count}, Runs: {allResults.Count}, Passed: {allResults.Count(result => result.Passed)}, Failed: {allResults.Count(result => !result.Passed)}"
+                $"[{timestamp}] TestPlans: {testPlanNodes.Count}, Runs: {previewResults.Count}, Passed: {previewResults.Count(result => result.Passed)}, Failed: {previewResults.Count(result => !result.Passed)}"
             };
 
             foreach (var plan in testPlanExecutions)
@@ -3985,6 +4045,7 @@ namespace Test_Automation
                     type = scopeType,
                     name = scopeName
                 },
+                previewDataMode = SelectedPreviewDataMode,
                 summary = new
                 {
                     total = details.Count,
