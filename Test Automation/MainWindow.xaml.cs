@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Data;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
@@ -9,6 +10,7 @@ using System.Text.Json;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using Test_Automation.Factories;
@@ -92,6 +94,15 @@ namespace Test_Automation
             "Sqlite"
         };
 
+        public ObservableCollection<string> DatasetFormatOptions { get; } = new ObservableCollection<string>
+        {
+            "Auto",
+            "Excel",
+            "Csv",
+            "Json",
+            "Xml"
+        };
+
         public ObservableCollection<string> ProjectRunModeOptions { get; } = new ObservableCollection<string>
         {
             "Sequence",
@@ -138,6 +149,8 @@ namespace Test_Automation
         private readonly ObservableCollection<string> _catalogBaseUrlOptions = new();
         private readonly ObservableCollection<string> _catalogEndpointOptions = new();
         private readonly ObservableCollection<string> _sqlAuthTypeOptions = new();
+        private DataTable _datasetPreviewTable = new("DatasetPreview");
+        private string _datasetPreviewStatus = "Choose a dataset source and click Refresh Preview.";
         private readonly List<ApiCatalogBaseUrlEntry> _parsedApiCatalog = new();
         private bool _isApplyingMainLayoutBounds;
         private static readonly string MainLayoutStatePath = Path.Combine(
@@ -405,6 +418,7 @@ namespace Test_Automation
                 NotifySelectedNodeEditorProperties();
                 RebuildExtractorSourceOptions();
                 RefreshComponentPreview();
+                RefreshDatasetPreview();
                 RefreshAssertionJsonTreePanel();
             }
         }
@@ -547,6 +561,7 @@ namespace Test_Automation
         public bool IsHttpSelected => SelectedNode?.Type == "Http";
         public bool IsGraphQlSelected => SelectedNode?.Type == "GraphQl";
         public bool IsSqlSelected => SelectedNode?.Type == "Sql";
+        public bool IsDatasetSelected => SelectedNode?.Type == "Dataset";
         public bool IsTimerSelected => SelectedNode?.Type == "Timer";
         public bool IsLoopSelected => SelectedNode?.Type == "Loop";
         public bool IsIfSelected => SelectedNode?.Type == "If";
@@ -725,6 +740,12 @@ namespace Test_Automation
                 OnPropertyChanged(nameof(HttpUrlResolved));
                 OnPropertyChanged(nameof(SqlConnectionResolved));
                 OnPropertyChanged(nameof(SqlQueryResolved));
+                OnPropertyChanged(nameof(DatasetResolvedSourcePath));
+
+                if (string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    RefreshDatasetPreview();
+                }
 
                 if (_isSyncingEnvironment)
                 {
@@ -1137,6 +1158,169 @@ namespace Test_Automation
             }
         }
 
+        public string DatasetFormat
+        {
+            get => string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("Format", "Auto")
+                : "Auto";
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("Format", value);
+                RefreshDatasetPreview();
+            }
+        }
+
+        public string DatasetSourcePath
+        {
+            get => string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("SourcePath", string.Empty)
+                : string.Empty;
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("SourcePath", value);
+                OnPropertyChanged(nameof(DatasetResolvedSourcePath));
+                RefreshDatasetPreview();
+            }
+        }
+
+        public string DatasetResolvedSourcePath => ResolveWithProjectVariables(DatasetSourcePath);
+
+        public string DatasetSheetName
+        {
+            get => string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("SheetName", string.Empty)
+                : string.Empty;
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("SheetName", value);
+                RefreshDatasetPreview();
+            }
+        }
+
+        public string DatasetCsvDelimiter
+        {
+            get => string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("CsvDelimiter", ",")
+                : ",";
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("CsvDelimiter", value);
+                RefreshDatasetPreview();
+            }
+        }
+
+        public bool DatasetCsvHasHeader
+        {
+            get
+            {
+                if (!string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                var raw = GetSettingValue("CsvHasHeader", "true");
+                return bool.TryParse(raw, out var parsed) ? parsed : true;
+            }
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("CsvHasHeader", value ? "true" : "false");
+                RefreshDatasetPreview();
+            }
+        }
+
+        public string DatasetJsonArrayPath
+        {
+            get => string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("JsonArrayPath", string.Empty)
+                : string.Empty;
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("JsonArrayPath", value);
+                RefreshDatasetPreview();
+            }
+        }
+
+        public string DatasetXmlRowPath
+        {
+            get => string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("XmlRowPath", string.Empty)
+                : string.Empty;
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("XmlRowPath", value);
+                RefreshDatasetPreview();
+            }
+        }
+
+        public string DatasetMaxRows
+        {
+            get => string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("MaxRows", "0")
+                : "0";
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("MaxRows", value);
+                RefreshDatasetPreview();
+            }
+        }
+
+        public DataView DatasetPreviewRows => _datasetPreviewTable.DefaultView;
+
+        public string DatasetPreviewStatus
+        {
+            get => _datasetPreviewStatus;
+            set
+            {
+                if (_datasetPreviewStatus == value)
+                {
+                    return;
+                }
+
+                _datasetPreviewStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
         private static string NormalizeSqlProvider(string? provider)
         {
             if (string.Equals(provider, "PostgreSql", StringComparison.OrdinalIgnoreCase)
@@ -1276,7 +1460,7 @@ namespace Test_Automation
 
         private static readonly string[] StepTypes =
         {
-            "Http", "GraphQl", "Sql", "Assert", "VariableExtractor", "Script", "Timer"
+            "Http", "GraphQl", "Sql", "Dataset", "Assert", "VariableExtractor", "Script", "Timer"
         };
 
         public MainWindow()
@@ -2281,6 +2465,12 @@ namespace Test_Automation
                     OnPropertyChanged(nameof(HttpUrlResolved));
                     OnPropertyChanged(nameof(SqlConnectionResolved));
                     OnPropertyChanged(nameof(SqlQueryResolved));
+                    OnPropertyChanged(nameof(DatasetResolvedSourcePath));
+
+                    if (string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                    {
+                        RefreshDatasetPreview();
+                    }
                 }
 
                 if (SetProjectVariable("env", selected))
@@ -2863,6 +3053,113 @@ namespace Test_Automation
             }
 
             owner.Endpoints.Remove(endpoint);
+        }
+
+        private void BrowseDatasetFileButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var dialog = new OpenFileDialog
+            {
+                Title = "Select Dataset File",
+                Filter = "All supported|*.xlsx;*.xlsm;*.xls;*.csv;*.json;*.xml|Excel|*.xlsx;*.xlsm;*.xls|CSV|*.csv|JSON|*.json|XML|*.xml|All files|*.*"
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            DatasetSourcePath = dialog.FileName;
+            RefreshDatasetPreview();
+        }
+
+        private void RefreshDatasetPreviewButton_Click(object sender, RoutedEventArgs e)
+        {
+            RefreshDatasetPreview();
+        }
+
+        private void RefreshDatasetPreview()
+        {
+            _datasetPreviewTable = new DataTable("DatasetPreview");
+
+            if (!string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+            {
+                DatasetPreviewStatus = "Select a Dataset component to preview rows.";
+                OnPropertyChanged(nameof(DatasetPreviewRows));
+                return;
+            }
+
+            var resolvedSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Format"] = DatasetFormat,
+                ["SourcePath"] = ResolveWithProjectVariables(DatasetSourcePath),
+                ["SheetName"] = ResolveWithProjectVariables(DatasetSheetName),
+                ["CsvDelimiter"] = ResolveWithProjectVariables(DatasetCsvDelimiter),
+                ["CsvHasHeader"] = DatasetCsvHasHeader ? "true" : "false",
+                ["JsonArrayPath"] = ResolveWithProjectVariables(DatasetJsonArrayPath),
+                ["XmlRowPath"] = ResolveWithProjectVariables(DatasetXmlRowPath),
+                ["MaxRows"] = ResolveWithProjectVariables(DatasetMaxRows)
+            };
+
+            try
+            {
+                var rows = Test_Automation.Componentes.Dataset.LoadRows(resolvedSettings);
+                var columnNames = rows
+                    .SelectMany(row => row.Keys)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (columnNames.Count == 0)
+                {
+                    _datasetPreviewTable.Columns.Add("NoData", typeof(string));
+                    var infoRow = _datasetPreviewTable.NewRow();
+                    infoRow["NoData"] = "No rows were loaded from source.";
+                    _datasetPreviewTable.Rows.Add(infoRow);
+                    DatasetPreviewStatus = $"Loaded 0 row(s) from {resolvedSettings["SourcePath"]}.";
+                    OnPropertyChanged(nameof(DatasetPreviewRows));
+                    return;
+                }
+
+                foreach (var columnName in columnNames)
+                {
+                    _datasetPreviewTable.Columns.Add(columnName, typeof(string));
+                }
+
+                foreach (var row in rows)
+                {
+                    var tableRow = _datasetPreviewTable.NewRow();
+                    foreach (var columnName in columnNames)
+                    {
+                        tableRow[columnName] = row.TryGetValue(columnName, out var value)
+                            ? (value?.ToString() ?? string.Empty)
+                            : string.Empty;
+                    }
+
+                    _datasetPreviewTable.Rows.Add(tableRow);
+                }
+
+                DatasetPreviewStatus = $"Loaded {rows.Count} row(s) from {resolvedSettings["SourcePath"]}.";
+            }
+            catch (Exception ex)
+            {
+                DatasetPreviewStatus = $"Dataset preview failed: {ex.Message}";
+            }
+
+            OnPropertyChanged(nameof(DatasetPreviewRows));
+        }
+
+        private void DatasetPreviewGrid_AutoGeneratingColumn(object sender, DataGridAutoGeneratingColumnEventArgs e)
+        {
+            // Use indexer binding so keys like "data.year" are treated as literal column names.
+            if (e.Column is DataGridTextColumn textColumn)
+            {
+                textColumn.Binding = new Binding($"[{e.PropertyName}]");
+            }
         }
 
         private void AddEndpointParameterButton_Click(object sender, RoutedEventArgs e)
@@ -3471,6 +3768,12 @@ namespace Test_Automation
                 OnPropertyChanged(nameof(HttpUrlResolved));
                 OnPropertyChanged(nameof(SqlConnectionResolved));
                 OnPropertyChanged(nameof(SqlQueryResolved));
+                OnPropertyChanged(nameof(DatasetResolvedSourcePath));
+
+                if (string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    RefreshDatasetPreview();
+                }
             }
             RebuildVariableUsageMap();
             OnPropertyChanged(nameof(ProjectVariablesForEditor));
@@ -3558,6 +3861,23 @@ namespace Test_Automation
 
                 if (ownerNode != null
                     && ReferenceEquals(ownerNode, SelectedNode)
+                    && string.Equals(ownerNode.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (string.Equals(changedSetting.Key, "SourcePath", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(changedSetting.Key, "Format", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(changedSetting.Key, "SheetName", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(changedSetting.Key, "CsvDelimiter", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(changedSetting.Key, "CsvHasHeader", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(changedSetting.Key, "JsonArrayPath", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(changedSetting.Key, "XmlRowPath", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(changedSetting.Key, "MaxRows", StringComparison.OrdinalIgnoreCase))
+                    {
+                        RefreshDatasetPreview();
+                    }
+                }
+
+                if (ownerNode != null
+                    && ReferenceEquals(ownerNode, SelectedNode)
                     && (string.Equals(changedSetting.Key, "CatalogBase", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(changedSetting.Key, "CatalogEndpoint", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(changedSetting.Key, "UrlCatalog", StringComparison.OrdinalIgnoreCase)))
@@ -3599,6 +3919,12 @@ namespace Test_Automation
                 OnPropertyChanged(nameof(HttpUrlResolved));
                 OnPropertyChanged(nameof(SqlConnectionResolved));
                 OnPropertyChanged(nameof(SqlQueryResolved));
+                OnPropertyChanged(nameof(DatasetResolvedSourcePath));
+
+                if (string.Equals(SelectedNode?.Type, "Dataset", StringComparison.OrdinalIgnoreCase))
+                {
+                    RefreshDatasetPreview();
+                }
                 if (string.Equals((sender as NodeSetting)?.Key, "env", StringComparison.OrdinalIgnoreCase)
                     || e.PropertyName == nameof(NodeSetting.Key))
                 {
@@ -6510,6 +6836,7 @@ namespace Test_Automation
             OnPropertyChanged(nameof(IsHttpSelected));
             OnPropertyChanged(nameof(IsGraphQlSelected));
             OnPropertyChanged(nameof(IsSqlSelected));
+            OnPropertyChanged(nameof(IsDatasetSelected));
             OnPropertyChanged(nameof(IsTimerSelected));
             OnPropertyChanged(nameof(IsLoopSelected));
             OnPropertyChanged(nameof(IsIfSelected));
@@ -6575,6 +6902,17 @@ namespace Test_Automation
             RaiseSqlAuthVisibilityChanged();
             OnPropertyChanged(nameof(SqlAuthUsername));
             OnPropertyChanged(nameof(SqlAuthPassword));
+            OnPropertyChanged(nameof(DatasetFormat));
+            OnPropertyChanged(nameof(DatasetSourcePath));
+            OnPropertyChanged(nameof(DatasetResolvedSourcePath));
+            OnPropertyChanged(nameof(DatasetSheetName));
+            OnPropertyChanged(nameof(DatasetCsvDelimiter));
+            OnPropertyChanged(nameof(DatasetCsvHasHeader));
+            OnPropertyChanged(nameof(DatasetJsonArrayPath));
+            OnPropertyChanged(nameof(DatasetXmlRowPath));
+            OnPropertyChanged(nameof(DatasetMaxRows));
+            OnPropertyChanged(nameof(DatasetPreviewRows));
+            OnPropertyChanged(nameof(DatasetPreviewStatus));
             OnPropertyChanged(nameof(TimerDelayMs));
             OnPropertyChanged(nameof(LoopIterations));
             OnPropertyChanged(nameof(IfCondition));

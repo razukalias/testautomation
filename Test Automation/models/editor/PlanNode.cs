@@ -202,6 +202,17 @@ namespace Test_Automation.Models.Editor
                 Settings.Add(new NodeSetting("AuthUsername", ""));
                 Settings.Add(new NodeSetting("AuthPassword", ""));
             }
+            else if (type == "Dataset")
+            {
+                Settings.Add(new NodeSetting("Format", "Auto"));
+                Settings.Add(new NodeSetting("SourcePath", ""));
+                Settings.Add(new NodeSetting("SheetName", ""));
+                Settings.Add(new NodeSetting("CsvDelimiter", ","));
+                Settings.Add(new NodeSetting("CsvHasHeader", "true"));
+                Settings.Add(new NodeSetting("JsonArrayPath", ""));
+                Settings.Add(new NodeSetting("XmlRowPath", ""));
+                Settings.Add(new NodeSetting("MaxRows", "0"));
+            }
             else if (type == "Timer")
             {
                 Settings.Add(new NodeSetting("DelayMs", "1000"));

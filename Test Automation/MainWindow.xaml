@@ -1023,6 +1023,101 @@
                     </Border>
 
                         <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
+                            Visibility="{Binding IsDatasetSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <StackPanel>
+                            <TextBlock Text="Dataset" FontWeight="SemiBold" Margin="0,0,0,6" />
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Format" />
+                                <ComboBox Grid.Column="1"
+                                          ItemsSource="{Binding DatasetFormatOptions}"
+                                          SelectedItem="{Binding DatasetFormat, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Source File" />
+                                <TextBox Grid.Column="1" Margin="0,0,6,0" Text="{Binding DatasetSourcePath, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Grid.Column="2" Content="Browse" Width="70" Click="BrowseDatasetFileButton_Click" />
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Resolved File" />
+                                <TextBox Grid.Column="1" Text="{Binding DatasetResolvedSourcePath, Mode=OneWay}" IsReadOnly="True" />
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Sheet (Excel)" />
+                                <TextBox Grid.Column="1" Text="{Binding DatasetSheetName, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="CSV" />
+                                <TextBox Grid.Column="1" Margin="0,0,6,0" Text="{Binding DatasetCsvDelimiter, UpdateSourceTrigger=PropertyChanged}" ToolTip="Delimiter, e.g. , or ; or |" />
+                                <CheckBox Grid.Column="2" VerticalAlignment="Center" Content="Has Header"
+                                          IsChecked="{Binding DatasetCsvHasHeader, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="JSON Path" />
+                                <TextBox Grid.Column="1" Text="{Binding DatasetJsonArrayPath, UpdateSourceTrigger=PropertyChanged}" ToolTip="Optional path to array, e.g. data.items" />
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="XML Row Path" />
+                                <TextBox Grid.Column="1" Text="{Binding DatasetXmlRowPath, UpdateSourceTrigger=PropertyChanged}" ToolTip="Optional row path, e.g. root/items/item" />
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Max Rows" />
+                                <TextBox Grid.Column="1" Margin="0,0,8,0" Text="{Binding DatasetMaxRows, UpdateSourceTrigger=PropertyChanged}" ToolTip="0 means all rows" />
+                                <Button Grid.Column="2" Content="Refresh Preview" Width="110" Click="RefreshDatasetPreviewButton_Click" />
+                            </Grid>
+                            <TextBlock Margin="0,0,0,6" Foreground="#4F5D6B" Text="{Binding DatasetPreviewStatus}" TextWrapping="Wrap" />
+                            <Border BorderBrush="#D7D7D7" BorderThickness="1" CornerRadius="3" Padding="4">
+                                <DataGrid ItemsSource="{Binding DatasetPreviewRows}"
+                                          AutoGenerateColumns="True"
+                                          AutoGeneratingColumn="DatasetPreviewGrid_AutoGeneratingColumn"
+                                          IsReadOnly="True"
+                                          CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          HeadersVisibility="All"
+                                          MinHeight="180"
+                                          MaxHeight="300"
+                                          GridLinesVisibility="All" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                        <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
                             Visibility="{Binding IsTimerSelected, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Grid>
                             <Grid.ColumnDefinitions>
