@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Data;
@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.Win32;
 using System.Windows;
@@ -23,6 +24,12 @@ namespace Test_Automation
 {
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
+        private static readonly JsonSerializerOptions PrettyJsonOptions = new()
+        {
+            WriteIndented = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+
         public ObservableCollection<PlanNode> RootNodes { get; } = new ObservableCollection<PlanNode>();
         public ObservableCollection<string> ExtractorSourceOptions { get; } = new ObservableCollection<string>();
         private static readonly string[] BaseExtractorSources =
@@ -1612,10 +1619,7 @@ namespace Test_Automation
                     Directory.CreateDirectory(directory);
                 }
 
-                var json = JsonSerializer.Serialize(state, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+                var json = JsonSerializer.Serialize(state, PrettyJsonOptions);
                 File.WriteAllText(MainLayoutStatePath, json);
             }
             catch
@@ -1677,10 +1681,7 @@ namespace Test_Automation
                     Directory.CreateDirectory(directory);
                 }
 
-                var json = JsonSerializer.Serialize(state, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+                var json = JsonSerializer.Serialize(state, PrettyJsonOptions);
                 File.WriteAllText(AppStatePath, json);
             }
             catch
@@ -1914,10 +1915,7 @@ namespace Test_Automation
                 Project = ToFileModel(projectNode)
             };
 
-            var json = JsonSerializer.Serialize(model, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
+            var json = JsonSerializer.Serialize(model, PrettyJsonOptions);
 
             File.WriteAllText(filePath, json);
         }
@@ -2001,10 +1999,7 @@ namespace Test_Automation
                 });
 
                 _lastExecutionContext = context;
-                VariablesPreview = JsonSerializer.Serialize(context.Variables, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+                VariablesPreview = JsonSerializer.Serialize(context.Variables, PrettyJsonOptions);
 
                 RefreshComponentPreview();
                 AppendRuntimeTraceBufferToPreviewLogs();
@@ -2135,10 +2130,7 @@ namespace Test_Automation
                 }
 
                 _lastExecutionContext = mergedExecutionContext;
-                VariablesPreview = JsonSerializer.Serialize(mergedVariables, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+                VariablesPreview = JsonSerializer.Serialize(mergedVariables, PrettyJsonOptions);
 
                 RefreshComponentPreview();
                 AppendRuntimeTraceBufferToPreviewLogs();
@@ -2353,10 +2345,7 @@ namespace Test_Automation
                 });
 
                 _lastExecutionContext = context;
-                VariablesPreview = JsonSerializer.Serialize(context.Variables, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+                VariablesPreview = JsonSerializer.Serialize(context.Variables, PrettyJsonOptions);
 
                 RefreshComponentPreview();
                 AppendRuntimeTraceBufferToPreviewLogs();
@@ -2557,10 +2546,7 @@ namespace Test_Automation
             }
 
             _lastExecutionContext = context;
-            VariablesPreview = JsonSerializer.Serialize(variables, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
+            VariablesPreview = JsonSerializer.Serialize(variables, PrettyJsonOptions);
         }
 
         private ComponentExecutor CreateExecutorWithHighlight()
@@ -3972,10 +3958,7 @@ namespace Test_Automation
         private void RefreshJsonPreview()
         {
             var model = RootNodes.Select(BuildNodeObject).ToList();
-            JsonPreview = JsonSerializer.Serialize(model, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
+            JsonPreview = JsonSerializer.Serialize(model, PrettyJsonOptions);
 
             RefreshComponentPreview();
             RefreshAssertionJsonTreePanel();
@@ -4073,7 +4056,7 @@ namespace Test_Automation
                         startTime = latestHttpExecution.StartTime,
                         endTime = latestHttpExecution.EndTime,
                         error = latestHttpExecution.Error
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
 
                     HttpResponseHeadersPreview = "{}";
                     HttpResponseCookiesPreview = "[]";
@@ -4084,7 +4067,7 @@ namespace Test_Automation
                         message = "Request failed before receiving an HTTP response.",
                         durationMs = latestHttpExecution.DurationMs,
                         threadIndex = latestHttpExecution.ThreadIndex
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
 
                     PreviewRequest = JsonSerializer.Serialize(new
                     {
@@ -4096,14 +4079,14 @@ namespace Test_Automation
                         error = latestHttpExecution.Error,
                         threadIndex = latestHttpExecution.ThreadIndex,
                         durationMs = latestHttpExecution.DurationMs
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
 
                     PreviewResponse = JsonSerializer.Serialize(new
                     {
                         status = latestHttpExecution.Status,
                         error = latestHttpExecution.Error,
                         message = "Request failed before receiving an HTTP response."
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
 
                     PreviewLogs = $"[{now}] HTTP preview refreshed\n[{now}] Target: {method} {url}\n[{now}] Last run failed: {latestHttpExecution.Error}";
                     AppendExtractionPreview(now);
@@ -4112,8 +4095,8 @@ namespace Test_Automation
 
                 var latestHttpData = latestHttpExecution?.Data as HttpData;
                 var requestHeaders = latestHttpData?.Headers ?? BuildRequestHeadersFromSettings();
-                HttpRequestHeadersPreview = JsonSerializer.Serialize(requestHeaders, new JsonSerializerOptions { WriteIndented = true });
-                HttpRequestCookiesPreview = JsonSerializer.Serialize(ExtractCookiesFromHeaders(requestHeaders, "Cookie"), new JsonSerializerOptions { WriteIndented = true });
+                HttpRequestHeadersPreview = JsonSerializer.Serialize(requestHeaders, PrettyJsonOptions);
+                HttpRequestCookiesPreview = JsonSerializer.Serialize(ExtractCookiesFromHeaders(requestHeaders, "Cookie"), PrettyJsonOptions);
                 HttpRequestMetadataPreview = JsonSerializer.Serialize(new
                 {
                     component = nodeName,
@@ -4126,11 +4109,11 @@ namespace Test_Automation
                     threadIndex = latestHttpExecution?.ThreadIndex,
                     startTime = latestHttpExecution?.StartTime,
                     endTime = latestHttpExecution?.EndTime
-                }, new JsonSerializerOptions { WriteIndented = true });
+                }, PrettyJsonOptions);
 
                 var responseHeaders = latestHttpData?.ResponseHeaders ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                HttpResponseHeadersPreview = JsonSerializer.Serialize(responseHeaders, new JsonSerializerOptions { WriteIndented = true });
-                HttpResponseCookiesPreview = JsonSerializer.Serialize(ExtractCookiesFromHeaders(responseHeaders, "Set-Cookie"), new JsonSerializerOptions { WriteIndented = true });
+                HttpResponseHeadersPreview = JsonSerializer.Serialize(responseHeaders, PrettyJsonOptions);
+                HttpResponseCookiesPreview = JsonSerializer.Serialize(ExtractCookiesFromHeaders(responseHeaders, "Set-Cookie"), PrettyJsonOptions);
                 HttpResponseMetadataPreview = JsonSerializer.Serialize(new
                 {
                     status = latestHttpExecution?.Status ?? "not-run",
@@ -4140,14 +4123,14 @@ namespace Test_Automation
                     durationMs = latestHttpExecution?.DurationMs,
                     threadIndex = latestHttpExecution?.ThreadIndex,
                     error = latestHttpExecution?.Error
-                }, new JsonSerializerOptions { WriteIndented = true });
+                }, PrettyJsonOptions);
 
                 if (httpRequestRuns.Count > 0)
                 {
                     PreviewRequest = JsonSerializer.Serialize(new
                     {
                         runs = httpRequestRuns
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
                 else
                 {
@@ -4157,7 +4140,7 @@ namespace Test_Automation
                         type = "Http",
                         method,
                         url
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
 
                 if (httpRuns.Count > 0)
@@ -4165,7 +4148,7 @@ namespace Test_Automation
                     PreviewResponse = JsonSerializer.Serialize(new
                     {
                         runs = httpRuns
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
                 else if (lastHttp != null)
                 {
@@ -4174,7 +4157,7 @@ namespace Test_Automation
                         status = lastHttp.ResponseStatus,
                         body = lastHttp.ResponseBody,
                         headers = lastHttp.Headers
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
                 else
                 {
@@ -4183,7 +4166,7 @@ namespace Test_Automation
                         message = "Response will be available after execution.",
                         component = nodeName,
                         type = "Http"
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
 
                 PreviewLogs = $"[{now}] HTTP preview refreshed\n[{now}] Target: {method} {url}";
@@ -4244,14 +4227,14 @@ namespace Test_Automation
                         error = latestGraphExecution.Error,
                         threadIndex = latestGraphExecution.ThreadIndex,
                         durationMs = latestGraphExecution.DurationMs
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
 
                     PreviewResponse = JsonSerializer.Serialize(new
                     {
                         status = latestGraphExecution.Status,
                         error = latestGraphExecution.Error,
                         message = "Request failed before receiving a GraphQL response."
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
 
                     PreviewLogs = $"[{now}] GraphQL preview refreshed\n[{now}] Endpoint: {endpoint}\n[{now}] Last run failed: {latestGraphExecution.Error}";
                     AppendExtractionPreview(now);
@@ -4263,7 +4246,7 @@ namespace Test_Automation
                     PreviewRequest = JsonSerializer.Serialize(new
                     {
                         runs = graphRequestRuns
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
                 else
                 {
@@ -4274,7 +4257,7 @@ namespace Test_Automation
                         endpoint,
                         query,
                         variables
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
 
                 if (graphRuns.Count > 0)
@@ -4282,7 +4265,7 @@ namespace Test_Automation
                     PreviewResponse = JsonSerializer.Serialize(new
                     {
                         runs = graphRuns
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
                 else if (lastGraphQl != null)
                 {
@@ -4290,7 +4273,7 @@ namespace Test_Automation
                     {
                         status = lastGraphQl.ResponseStatus,
                         body = lastGraphQl.ResponseBody
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
                 else
                 {
@@ -4299,7 +4282,7 @@ namespace Test_Automation
                         message = "Response will be available after execution.",
                         component = nodeName,
                         type = "GraphQl"
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
 
                 PreviewLogs = $"[{now}] GraphQL preview refreshed\n[{now}] Endpoint: {endpoint}";
@@ -4358,14 +4341,14 @@ namespace Test_Automation
                         error = latestSqlExecution.Error,
                         threadIndex = latestSqlExecution.ThreadIndex,
                         durationMs = latestSqlExecution.DurationMs
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
 
                     PreviewResponse = JsonSerializer.Serialize(new
                     {
                         status = latestSqlExecution.Status,
                         error = latestSqlExecution.Error,
                         message = "Execution failed before returning SQL data."
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
 
                     PreviewLogs = $"[{now}] SQL preview refreshed\n[{now}] Executing: {query}\n[{now}] Last run failed: {latestSqlExecution.Error}";
                     AppendExtractionPreview(now);
@@ -4377,7 +4360,7 @@ namespace Test_Automation
                     PreviewRequest = JsonSerializer.Serialize(new
                     {
                         runs = sqlRequestRuns
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
                 else
                 {
@@ -4388,7 +4371,7 @@ namespace Test_Automation
                         provider,
                         connection,
                         query
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
 
                 if (sqlRuns.Count > 0)
@@ -4396,7 +4379,7 @@ namespace Test_Automation
                     PreviewResponse = JsonSerializer.Serialize(new
                     {
                         runs = sqlRuns
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
                 else if (lastSql != null)
                 {
@@ -4405,7 +4388,7 @@ namespace Test_Automation
                     {
                         rows = lastSql.QueryResult,
                         affectedRows = rowsAffected
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
                 else
                 {
@@ -4414,7 +4397,7 @@ namespace Test_Automation
                         message = "Response will be available after execution.",
                         component = nodeName,
                         type = "Sql"
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
 
                 PreviewLogs = $"[{now}] SQL preview refreshed\n[{now}] Executing: {query}";
@@ -4450,7 +4433,7 @@ namespace Test_Automation
                     type = "Threads",
                     threadCount,
                     rampUpSeconds = rampUp
-                }, new JsonSerializerOptions { WriteIndented = true });
+                }, PrettyJsonOptions);
 
                 PreviewResponse = JsonSerializer.Serialize(new
                 {
@@ -4458,7 +4441,7 @@ namespace Test_Automation
                     message = lastResults.Count == 0
                         ? "Run the TestPlan to see thread results."
                         : "Last thread results"
-                }, new JsonSerializerOptions { WriteIndented = true });
+                }, PrettyJsonOptions);
 
                 PreviewLogs = $"[{now}] Threads preview refreshed\n[{now}] ThreadCount: {threadCount}, RampUpSeconds: {rampUp}";
                 AppendExtractionPreview(now);
@@ -4511,14 +4494,14 @@ namespace Test_Automation
                         error = latestScriptExecution.Error,
                         threadIndex = latestScriptExecution.ThreadIndex,
                         durationMs = latestScriptExecution.DurationMs
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
 
                     PreviewResponse = JsonSerializer.Serialize(new
                     {
                         status = latestScriptExecution.Status,
                         error = latestScriptExecution.Error,
                         message = "Script failed before returning execution data."
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
 
                     PreviewLogs = $"[{now}] Script preview refreshed\n[{now}] Last run failed: {latestScriptExecution.Error}";
                     AppendExtractionPreview(now);
@@ -4530,7 +4513,7 @@ namespace Test_Automation
                     PreviewRequest = JsonSerializer.Serialize(new
                     {
                         runs = scriptRequestRuns
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
                 else
                 {
@@ -4540,7 +4523,7 @@ namespace Test_Automation
                         type = "Script",
                         language,
                         code
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
 
                 if (scriptRuns.Count > 0)
@@ -4548,7 +4531,7 @@ namespace Test_Automation
                     PreviewResponse = JsonSerializer.Serialize(new
                     {
                         runs = scriptRuns
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
                 else
                 {
@@ -4557,7 +4540,7 @@ namespace Test_Automation
                         message = "Response will be available after execution.",
                         component = nodeName,
                         type = "Script"
-                    }, new JsonSerializerOptions { WriteIndented = true });
+                    }, PrettyJsonOptions);
                 }
 
                 PreviewLogs = $"[{now}] Script preview refreshed";
@@ -4598,14 +4581,14 @@ namespace Test_Automation
                     error = latestGenericExecution.Error,
                     threadIndex = latestGenericExecution.ThreadIndex,
                     durationMs = latestGenericExecution.DurationMs
-                }, new JsonSerializerOptions { WriteIndented = true });
+                }, PrettyJsonOptions);
 
                 PreviewResponse = JsonSerializer.Serialize(new
                 {
                     status = latestGenericExecution.Status,
                     error = latestGenericExecution.Error,
                     message = "Execution failed before returning component data."
-                }, new JsonSerializerOptions { WriteIndented = true });
+                }, PrettyJsonOptions);
 
                 PreviewLogs = $"[{now}] {nodeType} preview refreshed.\n[{now}] Last run failed: {latestGenericExecution.Error}";
                 AppendExtractionPreview(now);
@@ -4617,7 +4600,7 @@ namespace Test_Automation
                 PreviewRequest = JsonSerializer.Serialize(new
                 {
                     runs = genericRuns
-                }, new JsonSerializerOptions { WriteIndented = true });
+                }, PrettyJsonOptions);
             }
             else
             {
@@ -4626,7 +4609,7 @@ namespace Test_Automation
                     component = nodeName,
                     type = nodeType,
                     settings
-                }, new JsonSerializerOptions { WriteIndented = true });
+                }, PrettyJsonOptions);
             }
 
             if (genericRuns.Count > 0)
@@ -4634,7 +4617,7 @@ namespace Test_Automation
                 PreviewResponse = JsonSerializer.Serialize(new
                 {
                     runs = genericRuns
-                }, new JsonSerializerOptions { WriteIndented = true });
+                }, PrettyJsonOptions);
             }
             else
             {
@@ -4643,7 +4626,7 @@ namespace Test_Automation
                     message = "Preview available when this component is executed.",
                     component = nodeName,
                     type = nodeType
-                }, new JsonSerializerOptions { WriteIndented = true });
+                }, PrettyJsonOptions);
             }
 
             PreviewLogs = $"[{now}] {nodeType} preview refreshed.";
@@ -4754,7 +4737,7 @@ namespace Test_Automation
                 id = testPlanNode.Id,
                 name = testPlanNode.Name,
                 runtime = runtimeVariables
-            }, new JsonSerializerOptions { WriteIndented = true });
+            }, PrettyJsonOptions);
 
             PreviewRequest = JsonSerializer.Serialize(new
             {
@@ -4766,7 +4749,7 @@ namespace Test_Automation
                 executedComponents = componentBreakdown.Count,
                 runs = requestRuns,
                 structure = BuildPreviewNodeStructure(testPlanNode)
-            }, new JsonSerializerOptions { WriteIndented = true });
+            }, PrettyJsonOptions);
 
             PreviewResponse = JsonSerializer.Serialize(new
             {
@@ -4787,7 +4770,7 @@ namespace Test_Automation
                 },
                 runs = responseRuns,
                 components = componentBreakdown
-            }, new JsonSerializerOptions { WriteIndented = true });
+            }, PrettyJsonOptions);
 
             if (planResults.Count == 0)
             {
@@ -5083,10 +5066,7 @@ namespace Test_Automation
             {
                 project = projectVariables,
                 runtime = runtimeVariables
-            }, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
+            }, PrettyJsonOptions);
 
             PreviewRequest = JsonSerializer.Serialize(new
             {
@@ -5101,7 +5081,7 @@ namespace Test_Automation
                     totalRuns = requestRuns.Count
                 },
                 testPlans = testPlanRequests
-            }, new JsonSerializerOptions { WriteIndented = true });
+            }, PrettyJsonOptions);
 
             PreviewResponse = JsonSerializer.Serialize(new
             {
@@ -5115,7 +5095,7 @@ namespace Test_Automation
                     failedRuns = previewResults.Count(result => !result.Passed)
                 },
                 testPlans = testPlanResponses
-            }, new JsonSerializerOptions { WriteIndented = true });
+            }, PrettyJsonOptions);
 
             if (previewResults.Count == 0)
             {
@@ -5224,7 +5204,7 @@ namespace Test_Automation
                     expectFailed = summary.ExpectFailed
                 },
                 details
-            }, new JsonSerializerOptions { WriteIndented = true });
+            }, PrettyJsonOptions);
         }
 
         private static object BuildComponentRequestSnapshot(object? data)
@@ -5606,7 +5586,7 @@ namespace Test_Automation
             {
                 using var doc = JsonDocument.Parse(jsonText);
                 var normalized = ConvertJsonElementForExtraction(doc.RootElement);
-                return JsonSerializer.Serialize(normalized, new JsonSerializerOptions { WriteIndented = true });
+                return JsonSerializer.Serialize(normalized, PrettyJsonOptions);
             }
             catch
             {
@@ -6339,10 +6319,7 @@ namespace Test_Automation
                         query = endpoint.Query,
                         variables = endpoint.Variables
                     }).ToList()
-                }).ToList(), new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+                }).ToList(), PrettyJsonOptions);
 
                 SetProjectSettingValue("UrlCatalog", serialized);
                 OnPropertyChanged(nameof(ProjectUrlCatalogJson));
