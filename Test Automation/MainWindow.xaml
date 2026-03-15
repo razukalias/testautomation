@@ -105,6 +105,8 @@
                         <Style TargetType="TreeViewItem">
                             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                             <Setter Property="AllowDrop" Value="True" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="VerticalContentAlignment" Value="Center" />
                             <EventSetter Event="DragEnter" Handler="TreeViewItem_DragEnter" />
                             <EventSetter Event="DragLeave" Handler="TreeViewItem_DragLeave" />
                             <EventSetter Event="DragOver" Handler="TreeViewItem_DragOver" />
@@ -1389,7 +1391,14 @@
                                               Grid.Row="1"
                                               Grid.Column="0"
                                               Margin="0,0,8,0"
-                                              SelectedItemChanged="AssertionJsonTreeView_SelectedItemChanged" />
+                                              SelectedItemChanged="AssertionJsonTreeView_SelectedItemChanged">
+                                        <TreeView.ItemContainerStyle>
+                                            <Style TargetType="TreeViewItem">
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                <Setter Property="VerticalContentAlignment" Value="Center" />
+                                            </Style>
+                                        </TreeView.ItemContainerStyle>
+                                    </TreeView>
 
                                      <GridSplitter Grid.Row="1"
                                                 Grid.Column="1"

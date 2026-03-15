@@ -392,8 +392,8 @@ namespace Test_Automation
                 if (_selectedNode == value) return;
                 _selectedNode = value;
                 OnPropertyChanged();
-                NotifySelectedNodeEditorProperties();
                 SyncCatalogSelectionFromCurrentNode();
+                NotifySelectedNodeEditorProperties();
                 RebuildExtractorSourceOptions();
                 RefreshComponentPreview();
                 RefreshAssertionJsonTreePanel();
@@ -598,11 +598,23 @@ namespace Test_Automation
 
         public string SelectedHttpCatalogBase
         {
-            get => GetSettingValue("CatalogBase", string.Empty);
+            get => string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("CatalogBase", string.Empty)
+                : string.Empty;
             set
             {
-                if ((_isApplyingCatalogSelection || _isSynchronizingCatalogEditor) && string.IsNullOrEmpty(value)) return;
-                SetSettingValue("CatalogBase", value ?? string.Empty);
+                if (!string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                var next = value ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(next))
+                {
+                    return;
+                }
+
+                SetSettingValue("CatalogBase", next);
                 if (_isApplyingCatalogSelection)
                 {
                     return;
@@ -615,22 +627,46 @@ namespace Test_Automation
 
         public string SelectedHttpCatalogEndpoint
         {
-            get => GetSettingValue("CatalogEndpoint", string.Empty);
+            get => string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("CatalogEndpoint", string.Empty)
+                : string.Empty;
             set
             {
-                if ((_isApplyingCatalogSelection || _isSynchronizingCatalogEditor) && string.IsNullOrEmpty(value)) return;
-                SetSettingValue("CatalogEndpoint", value ?? string.Empty);
+                if (!string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                var next = value ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(next))
+                {
+                    return;
+                }
+
+                SetSettingValue("CatalogEndpoint", next);
                 OnPropertyChanged();
             }
         }
 
         public string SelectedGraphQlCatalogBase
         {
-            get => GetSettingValue("CatalogBase", string.Empty);
+            get => string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("CatalogBase", string.Empty)
+                : string.Empty;
             set
             {
-                if ((_isApplyingCatalogSelection || _isSynchronizingCatalogEditor) && string.IsNullOrEmpty(value)) return;
-                SetSettingValue("CatalogBase", value ?? string.Empty);
+                if (!string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                var next = value ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(next))
+                {
+                    return;
+                }
+
+                SetSettingValue("CatalogBase", next);
                 if (_isApplyingCatalogSelection)
                 {
                     return;
@@ -643,11 +679,23 @@ namespace Test_Automation
 
         public string SelectedGraphQlCatalogEndpoint
         {
-            get => GetSettingValue("CatalogEndpoint", string.Empty);
+            get => string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("CatalogEndpoint", string.Empty)
+                : string.Empty;
             set
             {
-                if ((_isApplyingCatalogSelection || _isSynchronizingCatalogEditor) && string.IsNullOrEmpty(value)) return;
-                SetSettingValue("CatalogEndpoint", value ?? string.Empty);
+                if (!string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                var next = value ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(next))
+                {
+                    return;
+                }
+
+                SetSettingValue("CatalogEndpoint", next);
                 OnPropertyChanged();
             }
         }
@@ -3347,6 +3395,15 @@ namespace Test_Automation
                 {
                     RefreshApiCatalogState();
                 }
+
+                if (ownerNode != null
+                    && ReferenceEquals(ownerNode, SelectedNode)
+                    && (string.Equals(changedSetting.Key, "CatalogBase", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(changedSetting.Key, "CatalogEndpoint", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(changedSetting.Key, "UrlCatalog", StringComparison.OrdinalIgnoreCase)))
+                {
+                    SyncCatalogSelectionFromCurrentNode();
+                }
             }
 
             if (shouldRebuildVariableMap)
@@ -5419,7 +5476,9 @@ namespace Test_Automation
                 return fallback;
             }
 
-            var setting = SelectedNode.Settings.FirstOrDefault(current => current.Key == key);
+            var normalizedKey = (key ?? string.Empty).Trim();
+            var setting = SelectedNode.Settings.FirstOrDefault(current =>
+                string.Equals(current.Key?.Trim(), normalizedKey, StringComparison.OrdinalIgnoreCase));
             return setting?.Value ?? fallback;
         }
 
@@ -5430,15 +5489,26 @@ namespace Test_Automation
                 return;
             }
 
-            var setting = SelectedNode.Settings.FirstOrDefault(current => current.Key == key);
+            var normalizedKey = (key ?? string.Empty).Trim();
+            var matchingSettings = SelectedNode.Settings
+                .Where(current => string.Equals(current.Key?.Trim(), normalizedKey, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var setting = matchingSettings.FirstOrDefault();
             if (setting == null)
             {
-                setting = new NodeSetting(key, value);
+                setting = new NodeSetting(normalizedKey, value);
                 SelectedNode.Settings.Add(setting);
             }
             else if (setting.Value != value)
             {
                 setting.Value = value;
+            }
+
+            // Keep only one setting per key so reads are deterministic.
+            foreach (var duplicate in matchingSettings.Skip(1).ToList())
+            {
+                SelectedNode.Settings.Remove(duplicate);
             }
 
             RefreshJsonPreview();
@@ -5855,10 +5925,16 @@ namespace Test_Automation
 
                 // Read directly from settings to avoid property-setter side-effects.
                 var baseName = GetSettingValue("CatalogBase", string.Empty);
+                var selectedEndpoint = GetSettingValue("CatalogEndpoint", string.Empty);
 
                 var baseEntry = _parsedApiCatalog.FirstOrDefault(entry => string.Equals(entry.Name, baseName, StringComparison.OrdinalIgnoreCase));
                 if (baseEntry == null)
                 {
+                    // Keep currently stored selection visible even if base/options are not yet ready.
+                    if (!string.IsNullOrWhiteSpace(selectedEndpoint))
+                    {
+                        _catalogEndpointOptions.Add(selectedEndpoint);
+                    }
                     return;
                 }
 
@@ -5867,17 +5943,15 @@ namespace Test_Automation
                     _catalogEndpointOptions.Add(endpoint.Name);
                 }
 
-                var selectedEndpoint = GetSettingValue("CatalogEndpoint", string.Empty);
                 if (_catalogEndpointOptions.Any(name => string.Equals(name, selectedEndpoint, StringComparison.OrdinalIgnoreCase)))
                 {
                     return;
                 }
 
-                // Selected endpoint is no longer valid for this base — clear it.
-                if (string.Equals(SelectedNode?.Type, "Http", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(SelectedNode?.Type, "GraphQl", StringComparison.OrdinalIgnoreCase))
+                // Keep persisted value visible/selected even if it no longer matches current catalog.
+                if (!string.IsNullOrWhiteSpace(selectedEndpoint))
                 {
-                    SetSettingValue("CatalogEndpoint", string.Empty);
+                    _catalogEndpointOptions.Add(selectedEndpoint);
                 }
             }
             finally
@@ -6282,12 +6356,8 @@ namespace Test_Automation
             OnPropertyChanged(nameof(ProjectDescription));
             OnPropertyChanged(nameof(ProjectEnvironment));
             OnPropertyChanged(nameof(ProjectUrlCatalogJson));
-            OnPropertyChanged(nameof(CatalogBaseUrlOptions));
-            OnPropertyChanged(nameof(CatalogEndpointOptions));
-            OnPropertyChanged(nameof(SelectedHttpCatalogBase));
-            OnPropertyChanged(nameof(SelectedHttpCatalogEndpoint));
-            OnPropertyChanged(nameof(SelectedGraphQlCatalogBase));
-            OnPropertyChanged(nameof(SelectedGraphQlCatalogEndpoint));
+            // SelectedHttpCatalogBase/Endpoint and SelectedGraphQl* are handled by
+            // SyncCatalogSelectionFromCurrentNode(), which runs before this method.
             OnPropertyChanged(nameof(SelectedEnvironment));
             OnPropertyChanged(nameof(HttpMethod));
             OnPropertyChanged(nameof(HttpUrl));
