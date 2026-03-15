@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
+using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
+using Microsoft.Data.Sqlite;
+using MySqlConnector;
+using Npgsql;
 using Test_Automation.Models;
 
 namespace Test_Automation.Componentes
@@ -16,87 +19,217 @@ namespace Test_Automation.Componentes
 
         public override async Task<ComponentData> Execute(Test_Automation.Models.ExecutionContext context)
         {
-            var connectionString = Settings.TryGetValue("Connection", out var connectionValue)
-                ? connectionValue
-                : string.Empty;
-            connectionString = ApplySqlAuth(Settings, connectionString);
+            var provider = NormalizeProvider(GetSetting("Provider", "SqlServer"));
+            var authType = GetSetting("AuthType", GetDefaultAuthType(provider));
+
+            var connectionString = GetSetting("Connection", string.Empty);
+            connectionString = ApplySqlAuth(provider, authType, Settings, connectionString);
 
             var data = new SqlData
             {
                 Id = this.Id,
                 ComponentName = this.Name,
+                Provider = provider,
                 ConnectionString = connectionString,
-                Query = Settings.TryGetValue("Query", out var queryValue) ? queryValue : string.Empty
+                Query = GetSetting("Query", string.Empty)
             };
 
-            data.Properties["authType"] = Settings.TryGetValue("AuthType", out var authTypeValue)
-                ? authTypeValue
-                : "WindowsIntegrated";
+            data.Properties["provider"] = provider;
+            data.Properties["authType"] = authType;
 
-            if (!string.IsNullOrWhiteSpace(data.ConnectionString) && !string.IsNullOrWhiteSpace(data.Query))
+            if (string.IsNullOrWhiteSpace(data.ConnectionString) || string.IsNullOrWhiteSpace(data.Query))
             {
-                using var connection = new SqlConnection(data.ConnectionString);
-                await connection.OpenAsync(context.StopToken);
-                using var command = new SqlCommand(data.Query, connection);
+                return data;
+            }
 
-                using var reader = await command.ExecuteReaderAsync(context.StopToken);
-                if (reader.FieldCount > 0)
+            using var connection = CreateConnection(provider, data.ConnectionString);
+            await connection.OpenAsync(context.StopToken);
+
+            using var command = connection.CreateCommand();
+            command.CommandText = data.Query;
+
+            using var reader = await command.ExecuteReaderAsync(context.StopToken);
+            if (reader.FieldCount > 0)
+            {
+                while (await reader.ReadAsync(context.StopToken))
                 {
-                    while (await reader.ReadAsync(context.StopToken))
+                    var row = new Dictionary<string, object>();
+                    for (var i = 0; i < reader.FieldCount; i++)
                     {
-                        var row = new Dictionary<string, object>();
-                        for (var i = 0; i < reader.FieldCount; i++)
-                        {
-                            var name = reader.GetName(i);
-                            var value = reader.IsDBNull(i) ? null : reader.GetValue(i);
-                            row[name] = value ?? string.Empty;
-                        }
-
-                        data.QueryResult.Add(row);
+                        var name = reader.GetName(i);
+                        var value = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                        row[name] = value ?? string.Empty;
                     }
+
+                    data.QueryResult.Add(row);
                 }
-                else
-                {
-                    var affected = reader.RecordsAffected;
-                    data.Properties["rowsAffected"] = affected;
-                }
+            }
+            else
+            {
+                data.Properties["rowsAffected"] = reader.RecordsAffected;
             }
 
             return data;
         }
 
-        private static string ApplySqlAuth(Dictionary<string, string> settings, string connectionString)
+        private string GetSetting(string key, string fallback)
         {
-            settings.TryGetValue("AuthType", out var authType);
+            return Settings.TryGetValue(key, out var value) ? value : fallback;
+        }
 
-            if (string.Equals(authType, "WindowsIntegrated", StringComparison.OrdinalIgnoreCase))
+        private static DbConnection CreateConnection(string provider, string connectionString)
+        {
+            return provider switch
             {
-                if (!ContainsConnectionKey(connectionString, "Integrated Security")
-                    && !ContainsConnectionKey(connectionString, "Trusted_Connection"))
+                "SqlServer" => new SqlConnection(connectionString),
+                "PostgreSql" => new NpgsqlConnection(connectionString),
+                "MySql" => new MySqlConnection(connectionString),
+                "Sqlite" => new SqliteConnection(connectionString),
+                _ => throw new InvalidOperationException($"Unsupported SQL provider: {provider}")
+            };
+        }
+
+        private static string NormalizeProvider(string? provider)
+        {
+            if (string.Equals(provider, "PostgreSql", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(provider, "Postgres", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(provider, "Npgsql", StringComparison.OrdinalIgnoreCase))
+            {
+                return "PostgreSql";
+            }
+
+            if (string.Equals(provider, "MySql", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(provider, "MySQL", StringComparison.OrdinalIgnoreCase))
+            {
+                return "MySql";
+            }
+
+            if (string.Equals(provider, "Sqlite", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(provider, "SQLite", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Sqlite";
+            }
+
+            return "SqlServer";
+        }
+
+        private static string GetDefaultAuthType(string provider)
+        {
+            return string.Equals(provider, "SqlServer", StringComparison.OrdinalIgnoreCase)
+                ? "WindowsIntegrated"
+                : "None";
+        }
+
+        private static string ApplySqlAuth(string provider, string authType, Dictionary<string, string> settings, string connectionString)
+        {
+            var normalizedProvider = NormalizeProvider(provider);
+            var normalizedAuth = string.IsNullOrWhiteSpace(authType) ? GetDefaultAuthType(normalizedProvider) : authType.Trim();
+
+            if (string.Equals(normalizedAuth, "None", StringComparison.OrdinalIgnoreCase))
+            {
+                return connectionString;
+            }
+
+            if (string.Equals(normalizedProvider, "Sqlite", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.Equals(normalizedAuth, "None", StringComparison.OrdinalIgnoreCase))
                 {
-                    connectionString = AppendConnectionPart(connectionString, "Integrated Security=true");
+                    throw new InvalidOperationException("Sqlite supports only 'None' authentication in SQL component.");
                 }
 
                 return connectionString;
             }
 
-            if (string.Equals(authType, "Basic", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(normalizedProvider, "SqlServer", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(normalizedAuth, "WindowsIntegrated", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!ContainsConnectionKey(connectionString, "Integrated Security")
+                        && !ContainsConnectionKey(connectionString, "Trusted_Connection"))
+                    {
+                        connectionString = AppendConnectionPart(connectionString, "Integrated Security=true");
+                    }
+
+                    return connectionString;
+                }
+
+                if (string.Equals(normalizedAuth, "Basic", StringComparison.OrdinalIgnoreCase))
+                {
+                    settings.TryGetValue("AuthUsername", out var username);
+                    settings.TryGetValue("AuthPassword", out var password);
+
+                    if (!string.IsNullOrWhiteSpace(username)
+                        && !ContainsConnectionKey(connectionString, "User Id")
+                        && !ContainsConnectionKey(connectionString, "UserID")
+                        && !ContainsConnectionKey(connectionString, "UID"))
+                    {
+                        connectionString = AppendConnectionPart(connectionString, $"User Id={username}");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(password)
+                        && !ContainsConnectionKey(connectionString, "Password")
+                        && !ContainsConnectionKey(connectionString, "Pwd"))
+                    {
+                        connectionString = AppendConnectionPart(connectionString, $"Password={password}");
+                    }
+
+                    return connectionString;
+                }
+
+                throw new InvalidOperationException($"Unsupported SQL Server auth type '{normalizedAuth}'. Use WindowsIntegrated, Basic, or None.");
+            }
+
+            if (string.Equals(normalizedAuth, "WindowsIntegrated", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Provider '{normalizedProvider}' does not support WindowsIntegrated auth in SQL component.");
+            }
+
+            if (string.Equals(normalizedAuth, "Basic", StringComparison.OrdinalIgnoreCase))
             {
                 settings.TryGetValue("AuthUsername", out var username);
                 settings.TryGetValue("AuthPassword", out var password);
 
-                if (!string.IsNullOrWhiteSpace(username) && !ContainsConnectionKey(connectionString, "User Id"))
+                if (string.Equals(normalizedProvider, "PostgreSql", StringComparison.OrdinalIgnoreCase))
                 {
-                    connectionString = AppendConnectionPart(connectionString, $"User Id={username}");
+                    if (!string.IsNullOrWhiteSpace(username)
+                        && !ContainsConnectionKey(connectionString, "Username")
+                        && !ContainsConnectionKey(connectionString, "User ID")
+                        && !ContainsConnectionKey(connectionString, "UserId"))
+                    {
+                        connectionString = AppendConnectionPart(connectionString, $"Username={username}");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(password)
+                        && !ContainsConnectionKey(connectionString, "Password"))
+                    {
+                        connectionString = AppendConnectionPart(connectionString, $"Password={password}");
+                    }
+
+                    return connectionString;
                 }
 
-                if (!string.IsNullOrWhiteSpace(password) && !ContainsConnectionKey(connectionString, "Password"))
+                if (string.Equals(normalizedProvider, "MySql", StringComparison.OrdinalIgnoreCase))
                 {
-                    connectionString = AppendConnectionPart(connectionString, $"Password={password}");
+                    if (!string.IsNullOrWhiteSpace(username)
+                        && !ContainsConnectionKey(connectionString, "User Id")
+                        && !ContainsConnectionKey(connectionString, "Uid")
+                        && !ContainsConnectionKey(connectionString, "UserID"))
+                    {
+                        connectionString = AppendConnectionPart(connectionString, $"User Id={username}");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(password)
+                        && !ContainsConnectionKey(connectionString, "Password")
+                        && !ContainsConnectionKey(connectionString, "Pwd"))
+                    {
+                        connectionString = AppendConnectionPart(connectionString, $"Password={password}");
+                    }
+
+                    return connectionString;
                 }
             }
 
-            return connectionString;
+            throw new InvalidOperationException($"Unsupported auth '{normalizedAuth}' for provider '{normalizedProvider}'.");
         }
 
         private static bool ContainsConnectionKey(string connectionString, string key)

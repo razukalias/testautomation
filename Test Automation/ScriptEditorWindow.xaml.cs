@@ -13,6 +13,7 @@ namespace Test_Automation
     public partial class ScriptEditorWindow : Window
     {
         private readonly bool _openScriptTabOnLoad;
+        private readonly bool _allowExecutionActions;
 
         private static readonly string ScriptEditorLayoutStatePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -28,14 +29,25 @@ namespace Test_Automation
         public string ScriptLanguage => LanguageTextBox.Text?.Trim() ?? "CSharp";
         public string ScriptText => ScriptTextBox.Text ?? string.Empty;
 
-        public ScriptEditorWindow(string title, string language, string script, bool openScriptTabOnLoad = false)
+        public ScriptEditorWindow(
+            string title,
+            string language,
+            string script,
+            bool openScriptTabOnLoad = false,
+            bool allowExecutionActions = true,
+            bool lockLanguage = false,
+            string? instructionsOverride = null)
         {
             InitializeComponent();
             _openScriptTabOnLoad = openScriptTabOnLoad;
+            _allowExecutionActions = allowExecutionActions;
             Title = string.IsNullOrWhiteSpace(title) ? "Script Editor" : title;
             LanguageTextBox.Text = string.IsNullOrWhiteSpace(language) ? "CSharp" : language;
+            LanguageTextBox.IsReadOnly = lockLanguage;
             ScriptTextBox.Text = script ?? string.Empty;
-            InstructionsTextBox.Text = BuildInstructions();
+            InstructionsTextBox.Text = string.IsNullOrWhiteSpace(instructionsOverride)
+                ? BuildInstructions()
+                : instructionsOverride;
             Loaded += (_, _) =>
             {
                 LoadScriptEditorLayoutState();
@@ -72,7 +84,9 @@ namespace Test_Automation
             }
 
             var isScriptTabSelected = EditorTabControl.SelectedIndex == 1;
-            var actionVisibility = isScriptTabSelected ? Visibility.Visible : Visibility.Collapsed;
+            var actionVisibility = _allowExecutionActions && isScriptTabSelected
+                ? Visibility.Visible
+                : Visibility.Collapsed;
             RunButton.Visibility = actionVisibility;
             ValidateButton.Visibility = actionVisibility;
         }
@@ -147,6 +161,11 @@ namespace Test_Automation
 
         private void ValidateButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!_allowExecutionActions)
+            {
+                return;
+            }
+
             OutputExpander.IsExpanded = true;
             var result = ScriptEngine.Validate(ScriptLanguage, ScriptText);
             if (result.Success)
@@ -178,6 +197,11 @@ namespace Test_Automation
 
         private async void RunButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!_allowExecutionActions)
+            {
+                return;
+            }
+
             OutputExpander.IsExpanded = true;
             AppendLog($"RUN: started (language={ScriptLanguage})");
 

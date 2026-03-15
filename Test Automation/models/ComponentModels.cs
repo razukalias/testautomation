@@ -78,6 +78,9 @@ namespace Test_Automation.Models
     /// </summary>
     public class SqlData : ComponentData
     {
+        [JsonPropertyName("provider")]
+        public string Provider { get; set; } = "SqlServer";
+
         [JsonPropertyName("connectionString")]
         public string ConnectionString { get; set; } = string.Empty;
 

@@ -84,6 +84,14 @@ namespace Test_Automation
             "OPTIONS"
         };
 
+        public ObservableCollection<string> SqlProviderOptions { get; } = new ObservableCollection<string>
+        {
+            "SqlServer",
+            "PostgreSql",
+            "MySql",
+            "Sqlite"
+        };
+
         public ObservableCollection<string> ProjectRunModeOptions { get; } = new ObservableCollection<string>
         {
             "Sequence",
@@ -129,6 +137,7 @@ namespace Test_Automation
         private readonly ObservableCollection<ApiCatalogBaseUrlEntry> _projectUrlCatalogEntries = new();
         private readonly ObservableCollection<string> _catalogBaseUrlOptions = new();
         private readonly ObservableCollection<string> _catalogEndpointOptions = new();
+        private readonly ObservableCollection<string> _sqlAuthTypeOptions = new();
         private readonly List<ApiCatalogBaseUrlEntry> _parsedApiCatalog = new();
         private bool _isApplyingMainLayoutBounds;
         private static readonly string MainLayoutStatePath = Path.Combine(
@@ -714,6 +723,8 @@ namespace Test_Automation
                 _selectedEnvironment = next;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(HttpUrlResolved));
+                OnPropertyChanged(nameof(SqlConnectionResolved));
+                OnPropertyChanged(nameof(SqlQueryResolved));
 
                 if (_isSyncingEnvironment)
                 {
@@ -1006,38 +1017,182 @@ namespace Test_Automation
 
         public string SqlConnection
         {
-            get => GetSettingValue("Connection", string.Empty);
-            set => SetSettingValue("Connection", value);
+            get => string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("Connection", string.Empty)
+                : string.Empty;
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("Connection", value);
+            }
+        }
+
+        public string SqlConnectionResolved => ResolveWithProjectVariables(SqlConnection);
+
+        public string SqlProvider
+        {
+            get => string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase)
+                ? NormalizeSqlProvider(GetSettingValue("Provider", "SqlServer"))
+                : "SqlServer";
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                var normalized = NormalizeSqlProvider(value);
+                SetSettingValue("Provider", normalized);
+                RefreshSqlAuthTypeOptions();
+
+                if (!_sqlAuthTypeOptions.Contains(SqlAuthType))
+                {
+                    SqlAuthType = GetDefaultSqlAuthType(normalized);
+                }
+
+                RaiseSqlAuthVisibilityChanged();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SqlAuthTypeOptions));
+            }
         }
 
         public string SqlQuery
         {
-            get => GetSettingValue("Query", string.Empty);
-            set => SetSettingValue("Query", value);
+            get => string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("Query", string.Empty)
+                : string.Empty;
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("Query", value);
+            }
         }
+
+        public string SqlQueryResolved => ResolveWithProjectVariables(SqlQuery);
 
         public string SqlAuthType
         {
-            get => GetSettingValue("AuthType", "WindowsIntegrated");
+            get => string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("AuthType", GetDefaultSqlAuthType(SqlProvider))
+                : GetDefaultSqlAuthType("SqlServer");
             set
             {
-                SetSettingValue("AuthType", value);
+                if (!string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                var normalized = value ?? string.Empty;
+                if (!_sqlAuthTypeOptions.Contains(normalized))
+                {
+                    normalized = GetDefaultSqlAuthType(SqlProvider);
+                }
+
+                SetSettingValue("AuthType", normalized);
                 RaiseSqlAuthVisibilityChanged();
             }
         }
+
+        public ObservableCollection<string> SqlAuthTypeOptions => _sqlAuthTypeOptions;
 
         public bool SqlShowBasicFields => string.Equals(SqlAuthType, "Basic", StringComparison.OrdinalIgnoreCase);
 
         public string SqlAuthUsername
         {
-            get => GetSettingValue("AuthUsername", string.Empty);
-            set => SetSettingValue("AuthUsername", value);
+            get => string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("AuthUsername", string.Empty)
+                : string.Empty;
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("AuthUsername", value);
+            }
         }
 
         public string SqlAuthPassword
         {
-            get => GetSettingValue("AuthPassword", string.Empty);
-            set => SetSettingValue("AuthPassword", value);
+            get => string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase)
+                ? GetSettingValue("AuthPassword", string.Empty)
+                : string.Empty;
+            set
+            {
+                if (!string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                SetSettingValue("AuthPassword", value);
+            }
+        }
+
+        private static string NormalizeSqlProvider(string? provider)
+        {
+            if (string.Equals(provider, "PostgreSql", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(provider, "Postgres", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(provider, "Npgsql", StringComparison.OrdinalIgnoreCase))
+            {
+                return "PostgreSql";
+            }
+
+            if (string.Equals(provider, "MySql", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(provider, "MySQL", StringComparison.OrdinalIgnoreCase))
+            {
+                return "MySql";
+            }
+
+            if (string.Equals(provider, "Sqlite", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(provider, "SQLite", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Sqlite";
+            }
+
+            return "SqlServer";
+        }
+
+        private static string GetDefaultSqlAuthType(string provider)
+        {
+            return string.Equals(NormalizeSqlProvider(provider), "SqlServer", StringComparison.OrdinalIgnoreCase)
+                ? "WindowsIntegrated"
+                : "None";
+        }
+
+        private void RefreshSqlAuthTypeOptions()
+        {
+            _sqlAuthTypeOptions.Clear();
+
+            var provider = string.Equals(SelectedNode?.Type, "Sql", StringComparison.OrdinalIgnoreCase)
+                ? SqlProvider
+                : "SqlServer";
+
+            if (string.Equals(provider, "SqlServer", StringComparison.OrdinalIgnoreCase))
+            {
+                _sqlAuthTypeOptions.Add("WindowsIntegrated");
+                _sqlAuthTypeOptions.Add("None");
+                _sqlAuthTypeOptions.Add("Basic");
+            }
+            else if (string.Equals(provider, "Sqlite", StringComparison.OrdinalIgnoreCase))
+            {
+                _sqlAuthTypeOptions.Add("None");
+            }
+            else
+            {
+                _sqlAuthTypeOptions.Add("None");
+                _sqlAuthTypeOptions.Add("Basic");
+            }
+
+            OnPropertyChanged(nameof(SqlAuthTypeOptions));
         }
 
         public string TimerDelayMs
@@ -1133,6 +1288,7 @@ namespace Test_Automation
             SizeChanged += MainWindow_SizeChanged;
             RootNodes.CollectionChanged += RootNodes_CollectionChanged;
             UpdateWindowTitle();
+            RefreshSqlAuthTypeOptions();
             RefreshEnvironmentOptions();
             RebuildVariableUsageMap();
             RefreshJsonPreview();
@@ -2123,6 +2279,8 @@ namespace Test_Automation
                     _selectedEnvironment = selected;
                     OnPropertyChanged(nameof(SelectedEnvironment));
                     OnPropertyChanged(nameof(HttpUrlResolved));
+                    OnPropertyChanged(nameof(SqlConnectionResolved));
+                    OnPropertyChanged(nameof(SqlQueryResolved));
                 }
 
                 if (SetProjectVariable("env", selected))
@@ -3311,6 +3469,8 @@ namespace Test_Automation
                 UpdateProjectVariablesPreview();
                 RefreshEnvironmentOptions();
                 OnPropertyChanged(nameof(HttpUrlResolved));
+                OnPropertyChanged(nameof(SqlConnectionResolved));
+                OnPropertyChanged(nameof(SqlQueryResolved));
             }
             RebuildVariableUsageMap();
             OnPropertyChanged(nameof(ProjectVariablesForEditor));
@@ -3437,6 +3597,8 @@ namespace Test_Automation
             {
                 UpdateProjectVariablesPreview();
                 OnPropertyChanged(nameof(HttpUrlResolved));
+                OnPropertyChanged(nameof(SqlConnectionResolved));
+                OnPropertyChanged(nameof(SqlQueryResolved));
                 if (string.Equals((sender as NodeSetting)?.Key, "env", StringComparison.OrdinalIgnoreCase)
                     || e.PropertyName == nameof(NodeSetting.Key))
                 {
@@ -3821,6 +3983,7 @@ namespace Test_Automation
 
             if (nodeType == "Sql")
             {
+                var provider = NormalizeSqlProvider(GetSettingValue("Provider", "SqlServer"));
                 var connection = GetSettingValue("Connection", "Server=.;Database=master;Trusted_Connection=True;");
                 var query = GetSettingValue("Query", "SELECT 1");
                 var latestSqlExecution = nodeExecutionResults
@@ -3836,6 +3999,7 @@ namespace Test_Automation
                         endTime = result.EndTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
                         durationMs = result.DurationMs,
                         status = result.Status,
+                        provider = (result.Data as SqlData)?.Provider,
                         connection = (result.Data as SqlData)?.ConnectionString,
                         query = (result.Data as SqlData)?.Query
                     })
@@ -3861,6 +4025,7 @@ namespace Test_Automation
                     {
                         component = nodeName,
                         type = "Sql",
+                        provider,
                         connection,
                         query,
                         status = latestSqlExecution.Status,
@@ -3894,6 +4059,7 @@ namespace Test_Automation
                     {
                         component = nodeName,
                         type = "Sql",
+                        provider,
                         connection,
                         query
                     }, new JsonSerializerOptions { WriteIndented = true });
@@ -6398,9 +6564,14 @@ namespace Test_Automation
             OnPropertyChanged(nameof(GraphQlOAuthClientId));
             OnPropertyChanged(nameof(GraphQlOAuthClientSecret));
             OnPropertyChanged(nameof(GraphQlOAuthScope));
+            RefreshSqlAuthTypeOptions();
+            OnPropertyChanged(nameof(SqlProvider));
             OnPropertyChanged(nameof(SqlConnection));
+            OnPropertyChanged(nameof(SqlConnectionResolved));
             OnPropertyChanged(nameof(SqlQuery));
+            OnPropertyChanged(nameof(SqlQueryResolved));
             OnPropertyChanged(nameof(SqlAuthType));
+            OnPropertyChanged(nameof(SqlAuthTypeOptions));
             RaiseSqlAuthVisibilityChanged();
             OnPropertyChanged(nameof(SqlAuthUsername));
             OnPropertyChanged(nameof(SqlAuthPassword));
@@ -6896,6 +7067,40 @@ namespace Test_Automation
             {
                 ScriptLanguage = string.IsNullOrWhiteSpace(editor.ScriptLanguage) ? "CSharp" : editor.ScriptLanguage;
                 ScriptCode = editor.ScriptText;
+            }
+
+            e.Handled = true;
+        }
+
+        private void SqlQueryTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (SelectedNode == null || !string.Equals(SelectedNode.Type, "Sql", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            const string sqlInstructions =
+                "SQL query editor. This editor supports multi-line SQL text.\n\n"
+                + "Tips:\n"
+                + "- Use ${varName} placeholders to inject runtime/project variables.\n"
+                + "- Example: SELECT * FROM users WHERE env = '${env}'\n"
+                + "- Use Save to apply changes to the SQL component query.";
+
+            var editor = new ScriptEditorWindow(
+                title: "SQL Query Editor",
+                language: "Sql",
+                script: SqlQuery,
+                openScriptTabOnLoad: true,
+                allowExecutionActions: false,
+                lockLanguage: true,
+                instructionsOverride: sqlInstructions)
+            {
+                Owner = this
+            };
+
+            if (editor.ShowDialog() == true)
+            {
+                SqlQuery = editor.ScriptText;
             }
 
             e.Handled = true;

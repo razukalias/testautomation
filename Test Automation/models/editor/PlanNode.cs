@@ -195,6 +195,7 @@ namespace Test_Automation.Models.Editor
             }
             else if (type == "Sql")
             {
+                Settings.Add(new NodeSetting("Provider", "SqlServer"));
                 Settings.Add(new NodeSetting("Connection", ""));
                 Settings.Add(new NodeSetting("Query", "SELECT 1"));
                 Settings.Add(new NodeSetting("AuthType", "WindowsIntegrated"));

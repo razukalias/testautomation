@@ -944,8 +944,26 @@
                                     <ColumnDefinition Width="100" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Provider" />
+                                <ComboBox Grid.Column="1"
+                                          ItemsSource="{Binding SqlProviderOptions}"
+                                          SelectedItem="{Binding SqlProvider, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Connection" />
                                 <TextBox Grid.Column="1" Text="{Binding SqlConnection, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Resolved Conn" />
+                                <TextBox Grid.Column="1" Text="{Binding SqlConnectionResolved, Mode=OneWay}" IsReadOnly="True" />
                             </Grid>
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -953,7 +971,20 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Query" />
-                                <TextBox Grid.Column="1" Text="{Binding SqlQuery, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding SqlQuery, UpdateSourceTrigger=PropertyChanged}"
+                                         IsReadOnly="True"
+                                         Cursor="Hand"
+                                         ToolTip="Click to open SQL query editor"
+                                         PreviewMouseLeftButtonDown="SqlQueryTextBox_PreviewMouseLeftButtonDown" />
+                            </Grid>
+                            <Grid Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Top" Text="Resolved Query" />
+                                <TextBox Grid.Column="1" Text="{Binding SqlQueryResolved, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" Height="60" VerticalScrollBarVisibility="Auto" />
                             </Grid>
                             <TextBlock Text="Authentication" FontWeight="SemiBold" Margin="0,10,0,6" />
                             <Grid Margin="0,0,0,6">
@@ -963,7 +994,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Type" />
                                 <ComboBox Grid.Column="1"
-                                          ItemsSource="{Binding AuthTypeOptions}"
+                                          ItemsSource="{Binding SqlAuthTypeOptions}"
                                           SelectedItem="{Binding SqlAuthType, UpdateSourceTrigger=PropertyChanged}" />
                             </Grid>
                             <Grid Margin="0,0,0,6">
