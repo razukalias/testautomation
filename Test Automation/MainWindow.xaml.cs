@@ -60,7 +60,8 @@ namespace Test_Automation
         public ObservableCollection<string> AssertionModeOptions { get; } = new ObservableCollection<string>
         {
             "Assert",
-            "Expect"
+            "Expect",
+            "Assert and Stop"
         };
 
         public ObservableCollection<string> EnvironmentOptions { get; } = new ObservableCollection<string>();

@@ -41,9 +41,7 @@ namespace Test_Automation.Models.Editor
             get => _mode;
             set
             {
-                var normalized = string.Equals(value, "Expect", System.StringComparison.OrdinalIgnoreCase)
-                    ? "Expect"
-                    : "Assert";
+                var normalized = NormalizeMode(value);
 
                 if (_mode == normalized) return;
                 _mode = normalized;
@@ -117,11 +115,28 @@ namespace Test_Automation.Models.Editor
         {
             _source = source;
             _jsonPath = jsonPath;
-            _mode = string.Equals(mode, "Expect", System.StringComparison.OrdinalIgnoreCase) ? "Expect" : "Assert";
+            _mode = NormalizeMode(mode);
             _condition = string.IsNullOrWhiteSpace(condition) ? "Equals" : condition;
             _expected = expected;
             _lastResultState = "NotRun";
             _lastMessage = string.Empty;
+        }
+
+        private static string NormalizeMode(string? mode)
+        {
+            if (string.Equals(mode, "Expect", System.StringComparison.OrdinalIgnoreCase))
+            {
+                return "Expect";
+            }
+
+            if (string.Equals(mode, "Assert and Stop", System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mode, "AssertAndStop", System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mode, "Assertion and Stop", System.StringComparison.OrdinalIgnoreCase))
+            {
+                return "Assert and Stop";
+            }
+
+            return "Assert";
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

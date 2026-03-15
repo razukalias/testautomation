@@ -74,6 +74,13 @@ namespace Test_Automation.Services
 
                 TraceLog($"Assertions for {component.Name}: passed={result.AssertPassedCount}, assertFailed={result.AssertFailedCount}, expectFailed={result.ExpectFailedCount}.");
 
+                var hasStopOnAssertFailure = assertionResults.Any(item => !item.Passed && IsStopOnAssertFailureMode(item.Mode));
+                if (hasStopOnAssertFailure)
+                {
+                    context.RequestStop();
+                    TraceLog($"Assertion requested stop for {component.Name}. Remaining components will not execute.");
+                }
+
                 if (result.AssertFailedCount > 0)
                 {
                     result.Error = string.Join(" | ", assertionResults
@@ -306,12 +313,29 @@ namespace Test_Automation.Services
 
         private static string NormalizeAssertionMode(string mode)
         {
-            return string.Equals(mode, "Expect", StringComparison.OrdinalIgnoreCase) ? "Expect" : "Assert";
+            if (string.Equals(mode, "Expect", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Expect";
+            }
+
+            if (string.Equals(mode, "Assert and Stop", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mode, "AssertAndStop", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mode, "Assertion and Stop", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Assert and Stop";
+            }
+
+            return "Assert";
         }
 
         private static bool IsAssertMode(string mode)
         {
             return !string.Equals(mode, "Expect", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsStopOnAssertFailureMode(string mode)
+        {
+            return string.Equals(mode, "Assert and Stop", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool EvaluateCondition(string actual, string expected, string condition, Test_Automation.Models.ExecutionContext? context = null, Action<string>? trace = null)
