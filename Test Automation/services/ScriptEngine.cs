@@ -235,12 +235,31 @@ namespace Test_Automation.Services
                 return null;
             }
 
-            return Vars.TryGetValue(name, out var value) ? value : null;
+            var key = name.Trim();
+            if (key.StartsWith("${", StringComparison.Ordinal) && key.EndsWith("}", StringComparison.Ordinal) && key.Length > 3)
+            {
+                key = key.Substring(2, key.Length - 3).Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return null;
+            }
+
+            return _context.GetVariable(key);
         }
 
         public string? VarText(string name)
         {
-            return Var(name)?.ToString();
+            var value = Var(name);
+            if (value is System.Text.Json.JsonElement json)
+            {
+                return json.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? json.GetString()
+                    : json.GetRawText();
+            }
+
+            return value?.ToString();
         }
 
         public void SetVar(string name, object? value)

@@ -70,6 +70,12 @@ namespace Test_Automation.Services
                 // Execute the component
                 var componentData = await component.Execute(context);
                 TraceLog($"Execute() completed for {component.Name}. Data type: {componentData?.GetType().Name ?? "<null>"}.");
+                if (componentData != null)
+                {
+                    componentData.Properties["startTime"] = result.StartTime;
+                    componentData.Properties["threadIndex"] = result.ThreadIndex;
+                    componentData.Properties["threadGroupId"] = result.ThreadGroupId;
+                }
                 result.Data = componentData;
                 ApplyVariableExtractors(component, context, componentData, TraceLog);
                 var assertionResults = EvaluateAssertions(component, componentData, context, TraceLog);
@@ -139,24 +145,27 @@ namespace Test_Automation.Services
 
             foreach (var extractor in component.Extractors)
             {
-                if (string.IsNullOrWhiteSpace(extractor.VariableName) || string.IsNullOrWhiteSpace(extractor.Source))
+                var variableName = extractor.VariableName?.Trim() ?? string.Empty;
+                var source = extractor.Source?.Trim() ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(variableName) || string.IsNullOrWhiteSpace(source))
                 {
                     trace?.Invoke($"Extractor skipped for {component.Name}: variable/source missing.");
                     continue;
                 }
 
-                trace?.Invoke($"Extractor start: variable='{extractor.VariableName}', source='{extractor.Source}', path='{extractor.JsonPath}'.");
-                var sourceValue = ResolveSourceValue(component, componentData, extractor.Source, trace);
+                trace?.Invoke($"Extractor start: variable='{variableName}', source='{source}', path='{extractor.JsonPath}'.");
+                var sourceValue = ResolveSourceValue(component, componentData, source, trace);
                 if (string.IsNullOrEmpty(sourceValue))
                 {
-                    trace?.Invoke($"Extractor source missing: {extractor.Source}.");
+                    trace?.Invoke($"Extractor source missing: {source}.");
                     continue;
                 }
 
                 if (string.IsNullOrWhiteSpace(extractor.JsonPath))
                 {
-                    context.SetVariable(extractor.VariableName, sourceValue);
-                    trace?.Invoke($"Extractor set variable '{extractor.VariableName}' from source value (no path).");
+                    context.SetVariable(variableName, sourceValue);
+                    trace?.Invoke($"Extractor set variable '{variableName}' from source value (no path).");
                     continue;
                 }
 
@@ -164,15 +173,15 @@ namespace Test_Automation.Services
                 if (string.Equals(jsonPath, "$", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(jsonPath, "$.", StringComparison.OrdinalIgnoreCase))
                 {
-                    context.SetVariable(extractor.VariableName, sourceValue);
-                    trace?.Invoke($"Extractor set variable '{extractor.VariableName}' using root path.");
+                    context.SetVariable(variableName, sourceValue);
+                    trace?.Invoke($"Extractor set variable '{variableName}' using root path.");
                     continue;
                 }
 
                 if (TryExtractJsonPath(sourceValue, extractor.JsonPath, out var extracted, trace))
                 {
-                    context.SetVariable(extractor.VariableName, extracted);
-                    trace?.Invoke($"Extractor set variable '{extractor.VariableName}' to '{extracted}'.");
+                    context.SetVariable(variableName, extracted);
+                    trace?.Invoke($"Extractor set variable '{variableName}' to '{extracted}'.");
                 }
                 else
                 {
@@ -188,6 +197,8 @@ namespace Test_Automation.Services
                 return null;
             }
 
+            source = source.Trim();
+
             if (string.Equals(source, "PreviewResponse", StringComparison.OrdinalIgnoreCase))
             {
                 trace?.Invoke("ResolveSourceValue using PreviewResponse payload.");
@@ -200,10 +211,27 @@ namespace Test_Automation.Services
                 return BuildPreviewRequest(componentData);
             }
 
+            if (string.Equals(source, "PreviewLogs", StringComparison.OrdinalIgnoreCase))
+            {
+                trace?.Invoke("ResolveSourceValue using PreviewLogs payload.");
+                return BuildPreviewLogs(componentData);
+            }
+
             if (component.Settings != null && component.Settings.TryGetValue(source, out var settingValue))
             {
                 trace?.Invoke($"ResolveSourceValue matched setting '{source}'.");
                 return settingValue;
+            }
+
+            if (component.Settings != null)
+            {
+                var setting = component.Settings
+                    .FirstOrDefault(entry => string.Equals(entry.Key?.Trim(), source, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(setting.Key))
+                {
+                    trace?.Invoke($"ResolveSourceValue matched setting '{setting.Key}' (normalized). ");
+                    return setting.Value;
+                }
             }
 
             if (componentData == null)
@@ -297,19 +325,22 @@ namespace Test_Automation.Services
 
                 evaluation.Actual = actual;
 
+                var resolvedExpected = ResolveTokens(assertion.Expected ?? string.Empty, context);
+                evaluation.Expected = resolvedExpected;
+
                 if (string.Equals(assertion.Condition, "Script", StringComparison.OrdinalIgnoreCase))
                 {
-                    trace?.Invoke($"Assertion[{index}] Script expression: {assertion.Expected}");
+                    trace?.Invoke($"Assertion[{index}] Script expression: {resolvedExpected}");
                 }
 
-                evaluation.Passed = EvaluateCondition(actual, assertion.Expected, assertion.Condition, context, trace);
+                evaluation.Passed = EvaluateCondition(actual, resolvedExpected, assertion.Condition, context, trace);
                 if (evaluation.Passed)
                 {
                     evaluation.Message = $"{mode} passed.";
                 }
                 else
                 {
-                    evaluation.Message = $"{mode} failed ({assertion.Condition}): actual='{actual}' expected='{assertion.Expected}'";
+                    evaluation.Message = $"{mode} failed ({assertion.Condition}): actual='{actual}' expected='{resolvedExpected}'";
                 }
 
                 trace?.Invoke($"Assertion[{index}] {evaluation.Message}");
@@ -488,6 +519,8 @@ namespace Test_Automation.Services
                 return null;
             }
 
+            var runStartTime = ResolveComponentStartTime(componentData);
+
             if (componentData is HttpData httpData)
             {
                 var parsedBody = TryParseJson(httpData.ResponseBody);
@@ -496,11 +529,13 @@ namespace Test_Automation.Services
                     status = httpData.ResponseStatus,
                     body = parsedBody,
                     headers = httpData.Headers,
+                    startTime = runStartTime,
                     runs = new[]
                     {
                         new
                         {
                             threadIndex = CurrentThreadIndex.Value ?? 0,
+                            startTime = runStartTime,
                             responseStatus = httpData.ResponseStatus,
                             responseBody = parsedBody,
                             headers = httpData.Headers
@@ -517,11 +552,13 @@ namespace Test_Automation.Services
                     status = graphQlData.ResponseStatus,
                     body = parsedBody,
                     headers = graphQlData.Headers,
+                    startTime = runStartTime,
                     runs = new[]
                     {
                         new
                         {
                             threadIndex = CurrentThreadIndex.Value ?? 0,
+                            startTime = runStartTime,
                             responseStatus = graphQlData.ResponseStatus,
                             responseBody = parsedBody,
                             headers = graphQlData.Headers
@@ -633,6 +670,25 @@ namespace Test_Automation.Services
             return JsonSerializer.Serialize(componentData);
         }
 
+        private static string? BuildPreviewLogs(ComponentData? componentData)
+        {
+            if (componentData == null)
+            {
+                return null;
+            }
+
+            var request = BuildPreviewRequest(componentData);
+            var response = BuildPreviewResponse(componentData);
+
+            return JsonSerializer.Serialize(new
+            {
+                request,
+                response,
+                component = componentData.GetType().Name,
+                timestampUtc = DateTime.UtcNow
+            });
+        }
+
         private static object? TryParseJson(string? payload)
         {
             if (string.IsNullOrWhiteSpace(payload))
@@ -651,6 +707,24 @@ namespace Test_Automation.Services
             }
         }
 
+        private static DateTime ResolveComponentStartTime(ComponentData componentData)
+        {
+            if (componentData.Properties.TryGetValue("startTime", out var startTimeValue) && startTimeValue != null)
+            {
+                if (startTimeValue is DateTime startTimeDateTime)
+                {
+                    return startTimeDateTime;
+                }
+
+                if (DateTime.TryParse(startTimeValue.ToString(), out var parsedStartTime))
+                {
+                    return parsedStartTime;
+                }
+            }
+
+            return componentData.Timestamp;
+        }
+
         private static bool TryExtractJsonPath(string json, string path, out string extracted, Action<string>? trace = null)
         {
             extracted = string.Empty;
@@ -663,7 +737,6 @@ namespace Test_Automation.Services
             try
             {
                 using var doc = JsonDocument.Parse(json);
-                var element = doc.RootElement;
                 var normalized = path.Trim();
                 if (normalized.StartsWith("$"))
                 {
@@ -674,35 +747,78 @@ namespace Test_Automation.Services
                     }
                 }
 
-                var segments = normalized.Split('.', StringSplitOptions.RemoveEmptyEntries);
-                trace?.Invoke($"TryExtractJsonPath start: path='{path}', normalized='{normalized}', segments={segments.Length}.");
-                foreach (var segment in segments)
+                trace?.Invoke($"TryExtractJsonPath start: path='{path}', normalized='{normalized}'.");
+
+                if (TryExtractJsonPathFromElement(doc.RootElement, normalized, out extracted, trace))
                 {
-                    if (!TryResolveSegment(ref element, segment))
-                    {
-                        trace?.Invoke($"TryExtractJsonPath failed at segment '{segment}'.");
-                        return false;
-                    }
+                    trace?.Invoke($"TryExtractJsonPath success: path='{path}', extracted='{extracted}'.");
+                    return true;
                 }
 
-                extracted = element.ValueKind switch
+                // User-friendly fallback: many users expect PreviewResponse/PreviewRequest JSON path
+                // to target payload body directly (e.g. $.token instead of $.body.token).
+                if (doc.RootElement.ValueKind == JsonValueKind.Object
+                    && !normalized.StartsWith("body", StringComparison.OrdinalIgnoreCase)
+                    && TryGetPropertyIgnoreCase(doc.RootElement, "body", out var bodyElement)
+                    && TryExtractJsonPathFromElement(bodyElement, normalized, out extracted, trace))
                 {
-                    JsonValueKind.String => element.GetString() ?? string.Empty,
-                    JsonValueKind.Number => element.GetRawText(),
-                    JsonValueKind.True => "true",
-                    JsonValueKind.False => "false",
-                    JsonValueKind.Null => "null",
-                    _ => element.GetRawText()
-                };
+                    trace?.Invoke($"TryExtractJsonPath fallback via 'body' succeeded: path='{path}', extracted='{extracted}'.");
+                    return true;
+                }
 
-                trace?.Invoke($"TryExtractJsonPath success: path='{path}', extracted='{extracted}'.");
-                return true;
+                if (doc.RootElement.ValueKind == JsonValueKind.Object
+                    && !normalized.StartsWith("responseBody", StringComparison.OrdinalIgnoreCase)
+                    && TryGetPropertyIgnoreCase(doc.RootElement, "responseBody", out var responseBodyElement)
+                    && TryExtractJsonPathFromElement(responseBodyElement, normalized, out extracted, trace))
+                {
+                    trace?.Invoke($"TryExtractJsonPath fallback via 'responseBody' succeeded: path='{path}', extracted='{extracted}'.");
+                    return true;
+                }
+
+                if (doc.RootElement.ValueKind == JsonValueKind.Object
+                    && !normalized.StartsWith("variables", StringComparison.OrdinalIgnoreCase)
+                    && TryGetPropertyIgnoreCase(doc.RootElement, "variables", out var variablesElement)
+                    && TryExtractJsonPathFromElement(variablesElement, normalized, out extracted, trace))
+                {
+                    trace?.Invoke($"TryExtractJsonPath fallback via 'variables' succeeded: path='{path}', extracted='{extracted}'.");
+                    return true;
+                }
+
+                trace?.Invoke($"TryExtractJsonPath failed for path '{path}'.");
+                return false;
             }
             catch
             {
                 trace?.Invoke($"TryExtractJsonPath exception for path '{path}'.");
                 return false;
             }
+        }
+
+        private static bool TryExtractJsonPathFromElement(JsonElement sourceElement, string normalizedPath, out string extracted, Action<string>? trace)
+        {
+            extracted = string.Empty;
+            var element = sourceElement;
+            var segments = normalizedPath.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var segment in segments)
+            {
+                if (!TryResolveSegment(ref element, segment))
+                {
+                    trace?.Invoke($"TryExtractJsonPath failed at segment '{segment}'.");
+                    return false;
+                }
+            }
+
+            extracted = element.ValueKind switch
+            {
+                JsonValueKind.String => element.GetString() ?? string.Empty,
+                JsonValueKind.Number => element.GetRawText(),
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                JsonValueKind.Null => "null",
+                _ => element.GetRawText()
+            };
+
+            return true;
         }
 
         private static bool TryResolveSegment(ref JsonElement element, string segment)
@@ -1134,7 +1250,7 @@ namespace Test_Automation.Services
 
             return System.Text.RegularExpressions.Regex.Replace(template, "\\$\\{([^}]+)\\}", match =>
             {
-                var key = match.Groups[1].Value;
+                var key = match.Groups[1].Value.Trim();
                 var value = context.GetVariable(key);
                 return value?.ToString() ?? string.Empty;
             });
@@ -1195,7 +1311,7 @@ namespace Test_Automation.Services
                     assertion.Source ?? string.Empty,
                     ResolveTokens(assertion.JsonPath ?? string.Empty, context),
                     assertion.Condition ?? string.Empty,
-                    ResolveTokens(assertion.Expected ?? string.Empty, context),
+                    assertion.Expected ?? string.Empty,
                     assertion.Mode ?? "Assert"));
             }
 

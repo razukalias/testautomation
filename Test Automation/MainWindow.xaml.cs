@@ -5318,7 +5318,8 @@ namespace Test_Automation
 
             var lines = new List<string>
             {
-                $"[{timestamp}] Variable extraction preview:"
+                $"[{timestamp}] Variable extraction preview:",
+                $"[{timestamp}] Note: preview only (runtime variables are created only during Run)."
             };
 
             foreach (var extractor in SelectedNode.Extractors)

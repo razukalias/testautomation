@@ -72,27 +72,30 @@ namespace Test_Automation.Models
 
         public void SetVariable(string key, object value)
         {
-            if (string.IsNullOrWhiteSpace(key))
+            var normalizedKey = key?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalizedKey))
             {
                 return;
             }
 
-            Variables[key] = value;
+            Variables[normalizedKey] = value;
         }
 
         public object? GetVariable(string key)
         {
-            if (string.IsNullOrWhiteSpace(key))
+            var normalizedKey = key?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalizedKey))
             {
                 return null;
             }
 
-            return Variables.TryGetValue(key, out var value) ? value : null;
+            return Variables.TryGetValue(normalizedKey, out var value) ? value : null;
         }
 
         public bool HasVariable(string key)
         {
-            return !string.IsNullOrWhiteSpace(key) && Variables.ContainsKey(key);
+            var normalizedKey = key?.Trim() ?? string.Empty;
+            return !string.IsNullOrWhiteSpace(normalizedKey) && Variables.ContainsKey(normalizedKey);
         }
     }
 
