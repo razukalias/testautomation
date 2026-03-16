@@ -20,7 +20,11 @@ namespace Test_Automation.Componentes
             {
                 Id = this.Id,
                 ComponentName = this.Name,
-                Collection = new List<object>()
+                Collection = new List<object>(),
+                ChildComponents = this.Children
+                    .Select(child => child.Name)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .ToList()
             };
             return Task.FromResult<ComponentData>(data);
         }

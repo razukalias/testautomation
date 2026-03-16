@@ -607,6 +607,42 @@ namespace Test_Automation.Services
                 });
             }
 
+            if (componentData is ForeachData foreachData)
+            {
+                var iterationCount = foreachData.Collection?.Count ?? 0;
+                var foreachSnapshot = new
+                {
+                    id = foreachData.Id,
+                    componentName = foreachData.ComponentName,
+                    properties = foreachData.Properties,
+                    timestamp = foreachData.Timestamp,
+                    collection = foreachData.Collection,
+                    currentIndex = foreachData.CurrentIndex,
+                    childComponents = foreachData.ChildComponents
+                };
+
+                return JsonSerializer.Serialize(new
+                {
+                    foreachSnapshot.id,
+                    foreachSnapshot.componentName,
+                    foreachSnapshot.properties,
+                    foreachSnapshot.timestamp,
+                    foreachSnapshot.collection,
+                    foreachSnapshot.currentIndex,
+                    foreachSnapshot.childComponents,
+                    runs = new[]
+                    {
+                        new
+                        {
+                            threadIndex = CurrentThreadIndex.Value ?? 0,
+                            startTime = runStartTime,
+                            iterations = iterationCount,
+                            data = foreachSnapshot
+                        }
+                    }
+                });
+            }
+
             if (componentData is SqlData sqlData)
             {
                 sqlData.Properties.TryGetValue("rowsAffected", out var rowsAffected);
@@ -1131,8 +1167,38 @@ namespace Test_Automation.Services
             var previousItem = context.GetVariable("CurrentItem");
             var previousIndex = context.GetVariable("CurrentIndex");
 
-            var collection = ResolveCollection(context, sourceVariable);
-            TraceLog($"ExecuteForeach source='{sourceVariable}' for {foreachComponent.Name}.");
+            var collection = ResolveCollection(context, sourceVariable).ToList();
+            TraceLog($"ExecuteForeach source='{sourceVariable}' resolved {collection.Count} item(s) for {foreachComponent.Name}.");
+
+            if (result.Data is ForeachData foreachData)
+            {
+                foreachData.Collection = collection;
+                foreachData.CurrentIndex = collection.Count == 0 ? -1 : collection.Count - 1;
+                foreachData.ChildComponents = foreachComponent.Children
+                    .Select(child => child.Name)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .ToList();
+                foreachData.Properties["sourceVariable"] = sourceVariable;
+                foreachData.Properties["itemCount"] = collection.Count;
+            }
+            else if (result.Data == null)
+            {
+                var foreachData = new ForeachData
+                {
+                    Id = foreachComponent.Id,
+                    ComponentName = foreachComponent.Name,
+                    Collection = collection,
+                    CurrentIndex = collection.Count == 0 ? -1 : collection.Count - 1,
+                    ChildComponents = foreachComponent.Children
+                        .Select(child => child.Name)
+                        .Where(name => !string.IsNullOrWhiteSpace(name))
+                        .ToList()
+                };
+                foreachData.Properties["sourceVariable"] = sourceVariable;
+                foreachData.Properties["itemCount"] = collection.Count;
+                result.Data = foreachData;
+            }
+
             var index = 0;
             foreach (var item in collection)
             {
