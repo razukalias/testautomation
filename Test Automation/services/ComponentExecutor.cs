@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Test_Automation.Componentes;
 using Test_Automation.Models;
@@ -562,6 +563,45 @@ namespace Test_Automation.Services
                             responseStatus = graphQlData.ResponseStatus,
                             responseBody = parsedBody,
                             headers = graphQlData.Headers
+                        }
+                    }
+                });
+            }
+
+            if (componentData is DatasetData datasetData)
+            {
+                var datasetRunTimestamp = runStartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+                var datasetSnapshot = new
+                {
+                    id = datasetData.Id,
+                    componentName = datasetData.ComponentName,
+                    properties = datasetData.Properties,
+                    timestamp = datasetData.Timestamp,
+                    dataSource = datasetData.DataSource,
+                    rows = datasetData.Rows,
+                    currentRow = datasetData.CurrentRow
+                };
+
+                return JsonSerializer.Serialize(new
+                {
+                    datasetSnapshot.id,
+                    datasetSnapshot.componentName,
+                    datasetSnapshot.properties,
+                    datasetSnapshot.timestamp,
+                    datasetSnapshot.dataSource,
+                    datasetSnapshot.rows,
+                    datasetSnapshot.currentRow,
+                    runs = new[]
+                    {
+                        new
+                        {
+                            threadIndex = CurrentThreadIndex.Value ?? 0,
+                            startTime = datasetRunTimestamp,
+                            endTime = datasetRunTimestamp,
+                            durationMs = 0,
+                            status = "passed",
+                            error = string.Empty,
+                            data = datasetSnapshot
                         }
                     }
                 });
@@ -1286,10 +1326,39 @@ namespace Test_Automation.Services
                 resolved.Add(new VariableExtractionRule(
                     extractor.Source ?? string.Empty,
                     ResolveTokens(extractor.JsonPath ?? string.Empty, context),
-                    ResolveTokens(extractor.VariableName ?? string.Empty, context)));
+                    ResolveExtractorVariableName(extractor.VariableName, context)));
             }
 
             return resolved;
+        }
+
+        private static readonly Regex SingleTokenVariableName = new Regex("^\\$\\{([^}]+)\\}$", RegexOptions.Compiled);
+
+        private static string ResolveExtractorVariableName(string? template, Test_Automation.Models.ExecutionContext context)
+        {
+            var raw = template?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return string.Empty;
+            }
+
+            var singleTokenMatch = SingleTokenVariableName.Match(raw);
+            if (singleTokenMatch.Success)
+            {
+                var inner = singleTokenMatch.Groups[1].Value.Trim();
+                if (!string.IsNullOrWhiteSpace(inner))
+                {
+                    return inner;
+                }
+            }
+
+            var resolved = ResolveTokens(raw, context)?.Trim();
+            if (!string.IsNullOrWhiteSpace(resolved))
+            {
+                return resolved;
+            }
+
+            return raw;
         }
 
         private static List<AssertionRule> ResolveAssertions(List<AssertionRule>? assertions, Test_Automation.Models.ExecutionContext context)
