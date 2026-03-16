@@ -4591,16 +4591,59 @@ namespace Test_Automation
                     collection
                 }, PrettyJsonOptions);
 
+                var foreachData = new
+                {
+                    collection = collection,
+                    currentIndex,
+                    currentItem,
+                    outputVariable = effectiveOutputVar
+                };
+
+                var iterationRuns = collection
+                    .Select((item, index) => new
+                    {
+                        threadIndex = latestForeachExecution?.ThreadIndex ?? 0,
+                        timestamp = now,
+                        iteration = index,
+                        status = latestForeachExecution?.Status ?? "not-run",
+                        data = new
+                        {
+                            collection,
+                            currentIndex = index,
+                            currentItem = (object?)item,
+                            outputVariable = effectiveOutputVar,
+                            message = (string?)string.Empty
+                        }
+                    })
+                    .ToList();
+
+                if (iterationRuns.Count == 0)
+                {
+                    iterationRuns.Add(new
+                    {
+                        threadIndex = latestForeachExecution?.ThreadIndex ?? 0,
+                        timestamp = now,
+                        iteration = -1,
+                        status = latestForeachExecution?.Status ?? "not-run",
+                        data = new
+                        {
+                            collection,
+                            currentIndex = -1,
+                            currentItem = (object?)null,
+                            outputVariable = effectiveOutputVar,
+                            message = (string?)"Collection is empty."
+                        }
+                    });
+                }
+
                 PreviewResponse = JsonSerializer.Serialize(new
                 {
                     component = nodeName,
                     type = "Foreach",
+                    timestamp = now,
                     status = latestForeachExecution?.Status ?? "not-run",
-                    outputVariable = effectiveOutputVar,
-                    currentIndex,
-                    currentItem,
-                    totalItems = collection.Count,
-                    message = collection.Count == 0 ? "Collection is empty." : null
+                    data = foreachData,
+                    runs = iterationRuns
                 }, PrettyJsonOptions);
 
                 PreviewLogs = $"[{now}] Foreach preview refreshed\n[{now}] Source: {sourceVariable}\n[{now}] Output: {effectiveOutputVar}";
