@@ -4561,6 +4561,53 @@ namespace Test_Automation
                 return;
             }
 
+            if (nodeType == "Foreach")
+            {
+                var sourceVariable = GetSettingValue("SourceVariable", string.Empty);
+                var outputVariableSetting = GetSettingValue("OutputVariable", string.Empty);
+                var effectiveOutputVar = string.IsNullOrWhiteSpace(outputVariableSetting)
+                    ? "CurrentItem"
+                    : outputVariableSetting.Trim();
+                var latestForeachExecution = nodeExecutionResults
+                    .OrderByDescending(result => result.EndTime ?? result.StartTime)
+                    .FirstOrDefault();
+                var lastForeachData = GetLastExecutionData<ForeachData>(nodeId);
+                var collection = lastForeachData?.Collection ?? new List<object>();
+                var currentIndex = lastForeachData?.CurrentIndex ?? (collection.Count > 0 ? collection.Count - 1 : -1);
+                var currentItem = lastForeachData?.CurrentItem;
+
+                if (currentItem == null && currentIndex >= 0 && currentIndex < collection.Count)
+                {
+                    currentItem = collection[currentIndex];
+                }
+
+                PreviewRequest = JsonSerializer.Serialize(new
+                {
+                    component = nodeName,
+                    type = "Foreach",
+                    sourceVariable,
+                    outputVariable = effectiveOutputVar,
+                    totalItems = collection.Count,
+                    collection
+                }, PrettyJsonOptions);
+
+                PreviewResponse = JsonSerializer.Serialize(new
+                {
+                    component = nodeName,
+                    type = "Foreach",
+                    status = latestForeachExecution?.Status ?? "not-run",
+                    outputVariable = effectiveOutputVar,
+                    currentIndex,
+                    currentItem,
+                    totalItems = collection.Count,
+                    message = collection.Count == 0 ? "Collection is empty." : null
+                }, PrettyJsonOptions);
+
+                PreviewLogs = $"[{now}] Foreach preview refreshed\n[{now}] Source: {sourceVariable}\n[{now}] Output: {effectiveOutputVar}";
+                AppendExtractionPreview(now);
+                return;
+            }
+
             var settings = SelectedNode.Settings
                 .Where(setting => !string.IsNullOrWhiteSpace(setting.Key))
                 .ToDictionary(setting => setting.Key, setting => setting.Value);
