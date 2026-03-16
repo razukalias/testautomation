@@ -4591,62 +4591,20 @@ namespace Test_Automation
                     collection
                 }, PrettyJsonOptions);
 
-                var foreachData = new
+                // Preview shows only the current item being processed
+                if (currentItem != null)
                 {
-                    collection = collection,
-                    currentIndex,
-                    currentItem,
-                    outputVariable = effectiveOutputVar
-                };
-
-                var iterationRuns = collection
-                    .Select((item, index) => new
-                    {
-                        threadIndex = latestForeachExecution?.ThreadIndex ?? 0,
-                        timestamp = now,
-                        iteration = index,
-                        status = latestForeachExecution?.Status ?? "not-run",
-                        data = new
-                        {
-                            collection,
-                            currentIndex = index,
-                            currentItem = (object?)item,
-                            outputVariable = effectiveOutputVar,
-                            message = (string?)string.Empty
-                        }
-                    })
-                    .ToList();
-
-                if (iterationRuns.Count == 0)
+                    PreviewResponse = JsonSerializer.Serialize(currentItem, PrettyJsonOptions);
+                }
+                else
                 {
-                    iterationRuns.Add(new
+                    PreviewResponse = JsonSerializer.Serialize(new
                     {
-                        threadIndex = latestForeachExecution?.ThreadIndex ?? 0,
-                        timestamp = now,
-                        iteration = -1,
-                        status = latestForeachExecution?.Status ?? "not-run",
-                        data = new
-                        {
-                            collection,
-                            currentIndex = -1,
-                            currentItem = (object?)null,
-                            outputVariable = effectiveOutputVar,
-                            message = (string?)"Collection is empty."
-                        }
-                    });
+                        message = "Collection is empty or no item selected."
+                    }, PrettyJsonOptions);
                 }
 
-                PreviewResponse = JsonSerializer.Serialize(new
-                {
-                    component = nodeName,
-                    type = "Foreach",
-                    timestamp = now,
-                    status = latestForeachExecution?.Status ?? "not-run",
-                    data = foreachData,
-                    runs = iterationRuns
-                }, PrettyJsonOptions);
-
-                PreviewLogs = $"[{now}] Foreach preview refreshed\n[{now}] Source: {sourceVariable}\n[{now}] Output: {effectiveOutputVar}";
+                PreviewLogs = $"[{now}] Foreach preview refreshed\n[{now}] Source: {sourceVariable}\n[{now}] Output: {effectiveOutputVar}\n[{now}] Current index: {currentIndex}\n[{now}] Total items: {collection.Count}";
                 AppendExtractionPreview(now);
                 return;
             }
