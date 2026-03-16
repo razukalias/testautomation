@@ -607,19 +607,47 @@ namespace Test_Automation.Services
                 });
             }
 
-            if (componentData is ForeachData foreachData)
+            if (componentData is ForeachData foreachDataSnapshot)
             {
-                var iterationCount = foreachData.Collection?.Count ?? 0;
                 var foreachSnapshot = new
                 {
-                    id = foreachData.Id,
-                    componentName = foreachData.ComponentName,
-                    properties = foreachData.Properties,
-                    timestamp = foreachData.Timestamp,
-                    collection = foreachData.Collection,
-                    currentIndex = foreachData.CurrentIndex,
-                    childComponents = foreachData.ChildComponents
+                    id = foreachDataSnapshot.Id,
+                    componentName = foreachDataSnapshot.ComponentName,
+                    properties = foreachDataSnapshot.Properties,
+                    timestamp = foreachDataSnapshot.Timestamp,
+                    collection = foreachDataSnapshot.Collection,
+                    currentIndex = foreachDataSnapshot.CurrentIndex,
+                    currentItem = foreachDataSnapshot.CurrentItem,
+                    childComponents = foreachDataSnapshot.ChildComponents,
+                    outputVariable = foreachDataSnapshot.OutputVariable
                 };
+
+                var iterationRuns = (foreachDataSnapshot.Collection ?? new List<object>())
+                    .Select((item, index) => new
+                    {
+                        threadIndex = CurrentThreadIndex.Value ?? 0,
+                        iteration = index,
+                        currentIndex = index,
+                        outputVariable = foreachDataSnapshot.OutputVariable,
+                        item = (object?)item,
+                        message = (string?)null,
+                        timestamp = runStartTime
+                    })
+                    .ToList();
+
+                if (iterationRuns.Count == 0)
+                {
+                    iterationRuns.Add(new
+                    {
+                        threadIndex = CurrentThreadIndex.Value ?? 0,
+                        iteration = -1,
+                        currentIndex = -1,
+                        outputVariable = foreachDataSnapshot.OutputVariable,
+                        item = (object?)null,
+                        message = (string?)"Collection is empty.",
+                        timestamp = runStartTime
+                    });
+                }
 
                 return JsonSerializer.Serialize(new
                 {
@@ -629,17 +657,10 @@ namespace Test_Automation.Services
                     foreachSnapshot.timestamp,
                     foreachSnapshot.collection,
                     foreachSnapshot.currentIndex,
+                    foreachSnapshot.currentItem,
                     foreachSnapshot.childComponents,
-                    runs = new[]
-                    {
-                        new
-                        {
-                            threadIndex = CurrentThreadIndex.Value ?? 0,
-                            startTime = runStartTime,
-                            iterations = iterationCount,
-                            data = foreachSnapshot
-                        }
-                    }
+                    foreachSnapshot.outputVariable,
+                    runs = iterationRuns
                 });
             }
 
@@ -1163,6 +1184,19 @@ namespace Test_Automation.Services
             var sourceVariable = foreachComponent.Settings.TryGetValue("SourceVariable", out var value)
                 ? value
                 : string.Empty;
+            var outputVariableSetting = foreachComponent.Settings.TryGetValue("OutputVariable", out var outputValue)
+                ? outputValue
+                : string.Empty;
+            var outputVariable = outputVariableSetting?.Trim() ?? string.Empty;
+            var hasOutputVariable = !string.IsNullOrWhiteSpace(outputVariable);
+
+            object? previousOutputValue = null;
+            var hadPreviousOutputValue = false;
+            if (hasOutputVariable && context.HasVariable(outputVariable))
+            {
+                previousOutputValue = context.GetVariable(outputVariable);
+                hadPreviousOutputValue = true;
+            }
 
             var previousItem = context.GetVariable("CurrentItem");
             var previousIndex = context.GetVariable("CurrentIndex");
@@ -1170,33 +1204,40 @@ namespace Test_Automation.Services
             var collection = ResolveCollection(context, sourceVariable).ToList();
             TraceLog($"ExecuteForeach source='{sourceVariable}' resolved {collection.Count} item(s) for {foreachComponent.Name}.");
 
-            if (result.Data is ForeachData foreachData)
+            var foreachDataResult = result.Data as ForeachData;
+
+            if (foreachDataResult != null)
             {
-                foreachData.Collection = collection;
-                foreachData.CurrentIndex = collection.Count == 0 ? -1 : collection.Count - 1;
-                foreachData.ChildComponents = foreachComponent.Children
+                foreachDataResult.Collection = collection;
+                foreachDataResult.CurrentIndex = collection.Count == 0 ? -1 : collection.Count - 1;
+                foreachDataResult.CurrentItem = collection.Count > 0 ? collection[^1] : null;
+                foreachDataResult.ChildComponents = foreachComponent.Children
                     .Select(child => child.Name)
                     .Where(name => !string.IsNullOrWhiteSpace(name))
                     .ToList();
-                foreachData.Properties["sourceVariable"] = sourceVariable;
-                foreachData.Properties["itemCount"] = collection.Count;
+                foreachDataResult.OutputVariable = outputVariable;
+                foreachDataResult.Properties["sourceVariable"] = sourceVariable;
+                foreachDataResult.Properties["itemCount"] = collection.Count;
             }
             else if (result.Data == null)
             {
-                var foreachData = new ForeachData
+                var newForeachData = new ForeachData
                 {
                     Id = foreachComponent.Id,
                     ComponentName = foreachComponent.Name,
                     Collection = collection,
                     CurrentIndex = collection.Count == 0 ? -1 : collection.Count - 1,
+                    CurrentItem = collection.Count > 0 ? collection[^1] : null,
+                    OutputVariable = outputVariable,
                     ChildComponents = foreachComponent.Children
                         .Select(child => child.Name)
                         .Where(name => !string.IsNullOrWhiteSpace(name))
                         .ToList()
                 };
-                foreachData.Properties["sourceVariable"] = sourceVariable;
-                foreachData.Properties["itemCount"] = collection.Count;
-                result.Data = foreachData;
+                newForeachData.Properties["sourceVariable"] = sourceVariable;
+                newForeachData.Properties["itemCount"] = collection.Count;
+                result.Data = newForeachData;
+                foreachDataResult = newForeachData;
             }
 
             var index = 0;
@@ -1206,6 +1247,17 @@ namespace Test_Automation.Services
                 TraceLog($"ExecuteForeach iteration index={index}, itemType={item?.GetType().Name ?? "<null>"}.");
                 context.SetVariable("CurrentItem", item);
                 context.SetVariable("CurrentIndex", index);
+                if (hasOutputVariable)
+                {
+                    context.SetVariable(outputVariable, item);
+                }
+
+                if (foreachDataResult != null)
+                {
+                    foreachDataResult.CurrentItem = item;
+                    foreachDataResult.CurrentIndex = index;
+                }
+
                 foreach (var child in foreachComponent.Children)
                 {
                     ThrowIfStopped(context, child.Name);
@@ -1226,6 +1278,18 @@ namespace Test_Automation.Services
             if (previousIndex != null)
             {
                 context.SetVariable("CurrentIndex", previousIndex);
+            }
+
+            if (hasOutputVariable)
+            {
+                if (hadPreviousOutputValue)
+                {
+                    context.SetVariable(outputVariable, previousOutputValue ?? string.Empty);
+                }
+                else
+                {
+                    context.Variables.TryRemove(outputVariable, out _);
+                }
             }
 
             return result;

@@ -573,6 +573,7 @@ namespace Test_Automation
         public bool IsLoopSelected => SelectedNode?.Type == "Loop";
         public bool IsIfSelected => SelectedNode?.Type == "If";
         public bool IsThreadsSelected => SelectedNode?.Type == "Threads";
+        public bool IsForeachSelected => SelectedNode?.Type == "Foreach";
         public bool IsAssertSelected => SelectedNode?.Type == "Assert";
         public bool IsVariableExtractorSelected => SelectedNode?.Type == "VariableExtractor";
         public bool IsScriptSelected => SelectedNode?.Type == "Script";
@@ -1396,6 +1397,18 @@ namespace Test_Automation
         {
             get => GetSettingValue("Iterations", "1");
             set => SetSettingValue("Iterations", value);
+        }
+
+        public string ForeachSourceVariable
+        {
+            get => GetSettingValue("SourceVariable", string.Empty);
+            set => SetSettingValue("SourceVariable", value);
+        }
+
+        public string ForeachOutputVariable
+        {
+            get => GetSettingValue("OutputVariable", string.Empty);
+            set => SetSettingValue("OutputVariable", value);
         }
 
         public string IfCondition
@@ -6819,6 +6832,7 @@ namespace Test_Automation
             OnPropertyChanged(nameof(IsLoopSelected));
             OnPropertyChanged(nameof(IsIfSelected));
             OnPropertyChanged(nameof(IsThreadsSelected));
+            OnPropertyChanged(nameof(IsForeachSelected));
             OnPropertyChanged(nameof(IsAssertSelected));
             OnPropertyChanged(nameof(IsVariableExtractorSelected));
             OnPropertyChanged(nameof(IsScriptSelected));
@@ -6893,6 +6907,8 @@ namespace Test_Automation
             OnPropertyChanged(nameof(DatasetPreviewStatus));
             OnPropertyChanged(nameof(TimerDelayMs));
             OnPropertyChanged(nameof(LoopIterations));
+            OnPropertyChanged(nameof(ForeachSourceVariable));
+            OnPropertyChanged(nameof(ForeachOutputVariable));
             OnPropertyChanged(nameof(IfCondition));
             OnPropertyChanged(nameof(ThreadCount));
             OnPropertyChanged(nameof(RampUpSeconds));

@@ -16,11 +16,17 @@ namespace Test_Automation.Componentes
 
         public override Task<ComponentData> Execute(Test_Automation.Models.ExecutionContext context)
         {
+            var outputVariable = Settings != null && Settings.TryGetValue("OutputVariable", out var configuredOutput)
+                ? configuredOutput ?? string.Empty
+                : string.Empty;
+
             var data = new ForeachData
             {
                 Id = this.Id,
                 ComponentName = this.Name,
                 Collection = new List<object>(),
+                CurrentItem = null,
+                OutputVariable = outputVariable?.Trim() ?? string.Empty,
                 ChildComponents = this.Children
                     .Select(child => child.Name)
                     .Where(name => !string.IsNullOrWhiteSpace(name))

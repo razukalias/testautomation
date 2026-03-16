@@ -198,6 +198,12 @@ namespace Test_Automation.Models
         [JsonPropertyName("currentIndex")]
         public int CurrentIndex { get; set; } = 0;
 
+        [JsonPropertyName("currentItem")]
+        public object? CurrentItem { get; set; }
+
+        [JsonPropertyName("outputVariable")]
+        public string OutputVariable { get; set; } = string.Empty;
+
         [JsonPropertyName("childComponents")]
         public List<string> ChildComponents { get; set; } = new List<string>();
     }

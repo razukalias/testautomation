@@ -1142,6 +1142,30 @@
                     </Border>
 
                         <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
+                            Visibility="{Binding IsForeachSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Source Variable" />
+                                <TextBox Grid.Column="1" Text="{Binding ForeachSourceVariable, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Variable name holding a collection (array, JSON array, or comma-separated string). Each iteration exposes CurrentItem and CurrentIndex." />
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Output Variable" />
+                                <TextBox Grid.Column="1" Text="{Binding ForeachOutputVariable, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Optional variable name that stores the current item for use by child components (defaults to CurrentItem)." />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                        <Border BorderBrush="#E3E3E3" BorderThickness="1" Padding="8" CornerRadius="3" Margin="0,0,0,8"
                             Visibility="{Binding IsIfSelected, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -1218,7 +1242,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Variable" />
-                                <TextBox Grid.Column="1" Text="{Binding ExtractorVariableName, UpdateSourceTrigger=LostFocus}" Margin="0,0,6,0" />
+                                <TextBox Grid.Column="1" Text="{Binding ExtractorVariableName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,0" />
                                 <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="#666666">
                                     <TextBlock.Text>
                                         <MultiBinding Converter="{StaticResource VariableUsageLabelConverter}">
@@ -1321,7 +1345,7 @@
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBox Grid.Column="0" Margin="0,0,6,0" Text="{Binding VariableName, UpdateSourceTrigger=LostFocus}" />
+                                                    <TextBox Grid.Column="0" Margin="0,0,6,0" Text="{Binding VariableName, UpdateSourceTrigger=PropertyChanged}" />
                                                     <TextBlock Grid.Column="1" VerticalAlignment="Center" Foreground="#666666">
                                                         <TextBlock.Text>
                                                             <MultiBinding Converter="{StaticResource VariableUsageLabelConverter}">
