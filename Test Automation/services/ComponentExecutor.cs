@@ -614,59 +614,16 @@ namespace Test_Automation.Services
 
             if (componentData is ForeachData foreachDataSnapshot)
             {
-                var foreachData_data = new
+                // For Foreach, return only the current item being processed
+                // This allows assertions to use paths like $.name directly
+                if (foreachDataSnapshot.CurrentItem != null)
                 {
-                    collection = foreachDataSnapshot.Collection,
-                    currentIndex = foreachDataSnapshot.CurrentIndex,
-                    currentItem = foreachDataSnapshot.CurrentItem,
-                    outputVariable = foreachDataSnapshot.OutputVariable
-                };
-
-                var iterationRuns = (foreachDataSnapshot.Collection ?? new List<object>())
-                    .Select((item, index) => new
-                    {
-                        threadIndex = CurrentThreadIndex.Value ?? 0,
-                        timestamp = runTimestampStr,
-                        iteration = index,
-                        status = "passed",
-                        data = new
-                        {
-                            collection = foreachDataSnapshot.Collection,
-                            currentIndex = index,
-                            currentItem = (object?)item,
-                            outputVariable = foreachDataSnapshot.OutputVariable,
-                            message = (string?)null
-                        }
-                    })
-                    .ToList();
-
-                if (iterationRuns.Count == 0)
-                {
-                    iterationRuns.Add(new
-                    {
-                        threadIndex = CurrentThreadIndex.Value ?? 0,
-                        timestamp = runTimestampStr,
-                        iteration = -1,
-                        status = "passed",
-                        data = new
-                        {
-                            collection = foreachDataSnapshot.Collection,
-                            currentIndex = -1,
-                            currentItem = (object?)null,
-                            outputVariable = foreachDataSnapshot.OutputVariable,
-                            message = (string?)"Collection is empty."
-                        }
-                    });
+                    return JsonSerializer.Serialize(foreachDataSnapshot.CurrentItem);
                 }
 
                 return JsonSerializer.Serialize(new
                 {
-                    component = componentData.ComponentName,
-                    type = "Foreach",
-                    timestamp = componentData.Timestamp,
-                    status = "passed",
-                    data = foreachData_data,
-                    runs = iterationRuns
+                    message = "Collection is empty or no item selected."
                 });
             }
 
