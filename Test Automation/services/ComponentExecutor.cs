@@ -521,25 +521,33 @@ namespace Test_Automation.Services
             }
 
             var runStartTime = ResolveComponentStartTime(componentData);
+            var runTimestampStr = runStartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
 
             if (componentData is HttpData httpData)
             {
                 var parsedBody = TryParseJson(httpData.ResponseBody);
+                var httpData_data = new
+                {
+                    responseStatus = httpData.ResponseStatus,
+                    responseBody = parsedBody,
+                    headers = httpData.Headers
+                };
+
                 return JsonSerializer.Serialize(new
                 {
-                    status = httpData.ResponseStatus,
-                    body = parsedBody,
-                    headers = httpData.Headers,
-                    startTime = runStartTime,
+                    component = componentData.ComponentName,
+                    type = "Http",
+                    timestamp = componentData.Timestamp,
+                    status = "passed",
+                    data = httpData_data,
                     runs = new[]
                     {
                         new
                         {
                             threadIndex = CurrentThreadIndex.Value ?? 0,
-                            startTime = runStartTime,
-                            responseStatus = httpData.ResponseStatus,
-                            responseBody = parsedBody,
-                            headers = httpData.Headers
+                            timestamp = runTimestampStr,
+                            status = "passed",
+                            data = httpData_data
                         }
                     }
                 });
@@ -548,21 +556,28 @@ namespace Test_Automation.Services
             if (componentData is GraphQlData graphQlData)
             {
                 var parsedBody = TryParseJson(graphQlData.ResponseBody);
+                var graphQlData_data = new
+                {
+                    responseStatus = graphQlData.ResponseStatus,
+                    responseBody = parsedBody,
+                    headers = graphQlData.Headers
+                };
+
                 return JsonSerializer.Serialize(new
                 {
-                    status = graphQlData.ResponseStatus,
-                    body = parsedBody,
-                    headers = graphQlData.Headers,
-                    startTime = runStartTime,
+                    component = componentData.ComponentName,
+                    type = "GraphQL",
+                    timestamp = componentData.Timestamp,
+                    status = "passed",
+                    data = graphQlData_data,
                     runs = new[]
                     {
                         new
                         {
                             threadIndex = CurrentThreadIndex.Value ?? 0,
-                            startTime = runStartTime,
-                            responseStatus = graphQlData.ResponseStatus,
-                            responseBody = parsedBody,
-                            headers = graphQlData.Headers
+                            timestamp = runTimestampStr,
+                            status = "passed",
+                            data = graphQlData_data
                         }
                     }
                 });
@@ -570,13 +585,8 @@ namespace Test_Automation.Services
 
             if (componentData is DatasetData datasetData)
             {
-                var datasetRunTimestamp = runStartTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
-                var datasetSnapshot = new
+                var datasetData_data = new
                 {
-                    id = datasetData.Id,
-                    componentName = datasetData.ComponentName,
-                    properties = datasetData.Properties,
-                    timestamp = datasetData.Timestamp,
                     dataSource = datasetData.DataSource,
                     rows = datasetData.Rows,
                     currentRow = datasetData.CurrentRow
@@ -584,24 +594,19 @@ namespace Test_Automation.Services
 
                 return JsonSerializer.Serialize(new
                 {
-                    datasetSnapshot.id,
-                    datasetSnapshot.componentName,
-                    datasetSnapshot.properties,
-                    datasetSnapshot.timestamp,
-                    datasetSnapshot.dataSource,
-                    datasetSnapshot.rows,
-                    datasetSnapshot.currentRow,
+                    component = componentData.ComponentName,
+                    type = "Dataset",
+                    timestamp = componentData.Timestamp,
+                    status = "passed",
+                    data = datasetData_data,
                     runs = new[]
                     {
                         new
                         {
                             threadIndex = CurrentThreadIndex.Value ?? 0,
-                            startTime = datasetRunTimestamp,
-                            endTime = datasetRunTimestamp,
-                            durationMs = 0,
+                            timestamp = runTimestampStr,
                             status = "passed",
-                            error = string.Empty,
-                            data = datasetSnapshot
+                            data = datasetData_data
                         }
                     }
                 });
@@ -609,16 +614,11 @@ namespace Test_Automation.Services
 
             if (componentData is ForeachData foreachDataSnapshot)
             {
-                var foreachSnapshot = new
+                var foreachData_data = new
                 {
-                    id = foreachDataSnapshot.Id,
-                    componentName = foreachDataSnapshot.ComponentName,
-                    properties = foreachDataSnapshot.Properties,
-                    timestamp = foreachDataSnapshot.Timestamp,
                     collection = foreachDataSnapshot.Collection,
                     currentIndex = foreachDataSnapshot.CurrentIndex,
                     currentItem = foreachDataSnapshot.CurrentItem,
-                    childComponents = foreachDataSnapshot.ChildComponents,
                     outputVariable = foreachDataSnapshot.OutputVariable
                 };
 
@@ -626,12 +626,17 @@ namespace Test_Automation.Services
                     .Select((item, index) => new
                     {
                         threadIndex = CurrentThreadIndex.Value ?? 0,
+                        timestamp = runTimestampStr,
                         iteration = index,
-                        currentIndex = index,
-                        outputVariable = foreachDataSnapshot.OutputVariable,
-                        item = (object?)item,
-                        message = (string?)null,
-                        timestamp = runStartTime
+                        status = "passed",
+                        data = new
+                        {
+                            collection = foreachDataSnapshot.Collection,
+                            currentIndex = index,
+                            currentItem = (object?)item,
+                            outputVariable = foreachDataSnapshot.OutputVariable,
+                            message = (string?)null
+                        }
                     })
                     .ToList();
 
@@ -640,26 +645,27 @@ namespace Test_Automation.Services
                     iterationRuns.Add(new
                     {
                         threadIndex = CurrentThreadIndex.Value ?? 0,
+                        timestamp = runTimestampStr,
                         iteration = -1,
-                        currentIndex = -1,
-                        outputVariable = foreachDataSnapshot.OutputVariable,
-                        item = (object?)null,
-                        message = (string?)"Collection is empty.",
-                        timestamp = runStartTime
+                        status = "passed",
+                        data = new
+                        {
+                            collection = foreachDataSnapshot.Collection,
+                            currentIndex = -1,
+                            currentItem = (object?)null,
+                            outputVariable = foreachDataSnapshot.OutputVariable,
+                            message = (string?)"Collection is empty."
+                        }
                     });
                 }
 
                 return JsonSerializer.Serialize(new
                 {
-                    foreachSnapshot.id,
-                    foreachSnapshot.componentName,
-                    foreachSnapshot.properties,
-                    foreachSnapshot.timestamp,
-                    foreachSnapshot.collection,
-                    foreachSnapshot.currentIndex,
-                    foreachSnapshot.currentItem,
-                    foreachSnapshot.childComponents,
-                    foreachSnapshot.outputVariable,
+                    component = componentData.ComponentName,
+                    type = "Foreach",
+                    timestamp = componentData.Timestamp,
+                    status = "passed",
+                    data = foreachData_data,
                     runs = iterationRuns
                 });
             }
@@ -667,14 +673,51 @@ namespace Test_Automation.Services
             if (componentData is SqlData sqlData)
             {
                 sqlData.Properties.TryGetValue("rowsAffected", out var rowsAffected);
-                return JsonSerializer.Serialize(new
+                var sqlData_data = new
                 {
                     rows = sqlData.QueryResult,
                     affectedRows = rowsAffected
+                };
+
+                return JsonSerializer.Serialize(new
+                {
+                    component = componentData.ComponentName,
+                    type = "SQL",
+                    timestamp = componentData.Timestamp,
+                    status = "passed",
+                    data = sqlData_data,
+                    runs = new[]
+                    {
+                        new
+                        {
+                            threadIndex = CurrentThreadIndex.Value ?? 0,
+                            timestamp = runTimestampStr,
+                            status = "passed",
+                            data = sqlData_data
+                        }
+                    }
                 });
             }
 
-            return JsonSerializer.Serialize(componentData);
+            // Generic fallback for unmapped component types
+            return JsonSerializer.Serialize(new
+            {
+                component = componentData.ComponentName,
+                type = componentData.GetType().Name,
+                timestamp = componentData.Timestamp,
+                status = "passed",
+                data = componentData,
+                runs = new[]
+                {
+                    new
+                    {
+                        threadIndex = CurrentThreadIndex.Value ?? 0,
+                        timestamp = runTimestampStr,
+                        status = "passed",
+                        data = componentData
+                    }
+                }
+            });
         }
 
         private static string? BuildPreviewRequest(ComponentData? componentData)
