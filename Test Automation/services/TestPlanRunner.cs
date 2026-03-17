@@ -15,12 +15,15 @@ namespace Test_Automation.Services
 
         public TestPlanRunner()
         {
-            _executor = new ComponentExecutor();
+            var variableService = new VariableService();
+            var assertionService = new AssertionService();
+            var conditionService = new ConditionService();
+            _executor = new ComponentExecutor(variableService, assertionService, conditionService);
         }
 
         public TestPlanRunner(ComponentExecutor executor)
         {
-            _executor = executor ?? new ComponentExecutor();
+            _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         }
 
         public async Task<ExecutionSummary> RunTestPlan(TestPlan testPlan)
@@ -62,7 +65,7 @@ namespace Test_Automation.Services
                 summary.PassedComponents = context.Results.Count(r => r.Passed);
                 summary.FailedComponents = context.Results.Count(r => !r.Passed);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 context.Status = "failed";
                 context.IsRunning = false;
@@ -110,7 +113,7 @@ namespace Test_Automation.Services
                 summary.PassedComponents = context.Results.Count(r => r.Passed);
                 summary.FailedComponents = context.Results.Count(r => !r.Passed);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 context.Status = "failed";
                 context.IsRunning = false;

@@ -101,15 +101,36 @@ namespace Test_Automation.Models.Editor
             {
                 return LastResultState switch
                 {
-                    "Passed" => "Passed",
-                    "AssertFailed" => "Assert failed",
-                    "ExpectFailed" => "Expect failed",
+                    "passed" => "✔",
+                    "failed" => "✖",
+                    _ => "…"
+                };
+            }
+        }
+
+        public string StatusMessage
+        {
+            get
+            {
+                return LastResultState switch
+                {
+                    "passed" => "Passed",
+                    "failed" => $"Failed: {LastMessage}",
                     _ => "Not run"
                 };
             }
         }
 
-        public string StatusMessage => string.IsNullOrWhiteSpace(LastMessage) ? StatusLabel : LastMessage;
+        public AssertionRule()
+        {
+            _source = string.Empty;
+            _jsonPath = string.Empty;
+            _condition = "Equals";
+            _expected = string.Empty;
+            _mode = DefaultMode;
+            _lastResultState = string.Empty;
+            _lastMessage = string.Empty;
+        }
 
         public AssertionRule(string source, string jsonPath, string condition, string expected, string mode = DefaultMode)
         {
@@ -124,19 +145,19 @@ namespace Test_Automation.Models.Editor
 
         private static string NormalizeMode(string? mode)
         {
-            if (string.Equals(mode, "Expect", System.StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(mode))
             {
-                return "Expect";
+                return DefaultMode;
             }
 
-            if (string.Equals(mode, "Assert and Stop", System.StringComparison.OrdinalIgnoreCase)
-                || string.Equals(mode, "AssertAndStop", System.StringComparison.OrdinalIgnoreCase)
-                || string.Equals(mode, "Assertion and Stop", System.StringComparison.OrdinalIgnoreCase))
+            var trimmed = mode.Trim();
+            if (string.Equals(trimmed, "Expect", System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(trimmed, "Expect-Stop", System.StringComparison.OrdinalIgnoreCase))
             {
-                return "Assert and Stop";
+                return trimmed;
             }
 
-            return "Assert";
+            return DefaultMode;
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
