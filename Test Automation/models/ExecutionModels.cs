@@ -182,6 +182,9 @@ namespace Test_Automation.Models
         [JsonPropertyName("assertPassedCount")]
         public int AssertPassedCount { get; set; }
 
+        [JsonPropertyName("previewData")]
+        public ComponentPreviewData? PreviewData { get; set; }
+
         public void MarkAsCompleted(bool success = true)
         {
             EndTime = DateTime.UtcNow;

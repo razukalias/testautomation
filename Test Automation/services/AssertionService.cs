@@ -104,6 +104,41 @@ namespace Test_Automation.Services
 
         private object? GetSourceValue(string source, ComponentData componentData)
         {
+            // Handle UI source names (PreviewResponse, PreviewRequest, etc.)
+            if (string.Equals(source, "PreviewResponse", StringComparison.OrdinalIgnoreCase))
+            {
+                return componentData switch
+                {
+                    HttpData http => http.ResponseBody,
+                    GraphQlData gql => gql.ResponseBody,
+                    SqlData sql => SerializeQueryResult(sql.QueryResult),
+                    DatasetData dataset => SerializeDatasetRows(dataset.Rows),
+                    _ => null
+                };
+            }
+
+            if (string.Equals(source, "PreviewRequest", StringComparison.OrdinalIgnoreCase))
+            {
+                return componentData switch
+                {
+                    HttpData http => http.Body,
+                    GraphQlData gql => gql.Query,
+                    SqlData sql => sql.Query,
+                    _ => null
+                };
+            }
+
+            // Handle Dataset-specific source
+            if (string.Equals(source, "DatasetRows", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(source, "Rows", StringComparison.OrdinalIgnoreCase))
+            {
+                if (componentData is DatasetData dataset)
+                {
+                    return dataset.Rows;
+                }
+                return null;
+            }
+
             if (string.Equals(source, "Body", StringComparison.OrdinalIgnoreCase))
             {
                 return componentData switch
@@ -130,6 +165,40 @@ namespace Test_Automation.Services
             }
 
             return null;
+        }
+
+        private string SerializeQueryResult(List<Dictionary<string, object>>? queryResult)
+        {
+            if (queryResult == null || queryResult.Count == 0)
+            {
+                return "[]";
+            }
+
+            try
+            {
+                return System.Text.Json.JsonSerializer.Serialize(queryResult);
+            }
+            catch
+            {
+                return "[]";
+            }
+        }
+
+        private string SerializeDatasetRows(List<Dictionary<string, object>>? rows)
+        {
+            if (rows == null || rows.Count == 0)
+            {
+                return "[]";
+            }
+
+            try
+            {
+                return System.Text.Json.JsonSerializer.Serialize(rows);
+            }
+            catch
+            {
+                return "[]";
+            }
         }
 
         private object? ExtractValue(object? sourceValue, string jsonPath)

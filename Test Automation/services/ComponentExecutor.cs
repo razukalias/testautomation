@@ -19,6 +19,7 @@ namespace Test_Automation.Services
         private readonly IVariableService _variableService;
         private readonly IAssertionService _assertionService;
         private readonly IConditionService _conditionService;
+        private readonly PreviewBuilder _previewBuilder = new PreviewBuilder();
 
         private static readonly System.Threading.AsyncLocal<int?> CurrentThreadIndex = new System.Threading.AsyncLocal<int?>();
         private static readonly System.Threading.AsyncLocal<string?> CurrentThreadGroupId = new System.Threading.AsyncLocal<string?>();
@@ -94,6 +95,9 @@ namespace Test_Automation.Services
                 result.AssertFailedCount = assertionResults.Count(item => !item.Passed && IsAssertMode(item.Mode));
                 result.ExpectFailedCount = assertionResults.Count(item => !item.Passed && !IsAssertMode(item.Mode));
                 result.AssertPassedCount = assertionResults.Count(item => item.Passed);
+
+                // Build and attach preview data
+                _previewBuilder.BuildAndAttachPreviewData(component, result, context);
 
                 var stopRequestedByAssertion = assertionResults.Any(item => !item.Passed && IsStopOnAssertFailureMode(item.Mode));
                 if (stopRequestedByAssertion)
@@ -269,7 +273,16 @@ namespace Test_Automation.Services
 
             var sourceVariable = foreachComponent.Settings.TryGetValue("SourceVariable", out var source) ? source : string.Empty;
             var outputVariable = foreachComponent.Settings.TryGetValue("OutputVariable", out var output) ? output?.Trim() : string.Empty;
+            
+            TraceLog($"Foreach '{foreachComponent.Name}': SourceVariable='{sourceVariable}', OutputVariable='{outputVariable}'");
+            
+            // Check if the variable exists
+            var variableValue = context.GetVariable(sourceVariable);
+            TraceLog($"Foreach '{foreachComponent.Name}': Variable '{sourceVariable}' value type: {variableValue?.GetType().Name ?? "null"}, value preview: {(variableValue?.ToString()?.Substring(0, Math.Min(100, variableValue?.ToString()?.Length ?? 0)) ?? "null")}");
+            
             var items = ResolveCollection(context, sourceVariable).ToList();
+            
+            TraceLog($"Foreach '{foreachComponent.Name}': Resolved {items.Count} items from '{sourceVariable}'");
 
             var foreachData = result.Data as ForeachData;
             if (foreachData != null)
@@ -389,11 +402,17 @@ namespace Test_Automation.Services
                     {
                         return doc.RootElement.EnumerateArray().Select(item => (object)item.Clone()).ToList();
                     }
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                    {
+                        // Single object - return as single-item list
+                        return new List<object> { doc.RootElement.Clone() };
+                    }
                 }
                 catch
                 {
                 }
 
+                // If not valid JSON, split by comma
                 return text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Cast<object>()
                     .ToList();
