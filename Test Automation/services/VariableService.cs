@@ -58,6 +58,16 @@ namespace Test_Automation.Services
                     continue;
                 }
 
+                // Handle Variable source - get value from context variables
+                if (extractor.Source.StartsWith("Variable.", StringComparison.OrdinalIgnoreCase))
+                {
+                    var varName = extractor.Source.Substring("Variable.".Length);
+                    var value = context.GetVariable(varName);
+                    trace($"Extractor '{extractor.VariableName}': Variable source '{varName}' = {value}");
+                    context.SetVariable(extractor.VariableName, value ?? string.Empty);
+                    continue;
+                }
+
                 var sourceValue = GetSourceValue(extractor.Source, componentData);
                 
                 trace($"Extractor '{extractor.VariableName}': GetSourceValue returned type={sourceValue?.GetType().Name ?? "null"}");
@@ -106,6 +116,14 @@ namespace Test_Automation.Services
 
         private object? GetSourceValue(string source, ComponentData componentData)
         {
+            // Handle Variable source - read from component's variables (set during execution)
+            if (source.StartsWith("Variable.", StringComparison.OrdinalIgnoreCase))
+            {
+                // This will be handled at execution time with the actual context
+                // For now, return the variable name as the value
+                return source.Substring("Variable.".Length);
+            }
+
             // Handle UI source names (PreviewResponse, PreviewRequest, etc.)
             if (string.Equals(source, "PreviewResponse", StringComparison.OrdinalIgnoreCase))
             {

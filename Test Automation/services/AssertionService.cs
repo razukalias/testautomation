@@ -41,7 +41,20 @@ namespace Test_Automation.Services
             for (var index = 0; index < component.Assertions.Count; index++)
             {
                 var assertion = component.Assertions[index];
-                var sourceValue = GetSourceValue(assertion.Source, componentData);
+                
+                // Handle Variable source - get value from context
+                object? sourceValue;
+                if (assertion.Source.StartsWith("Variable.", StringComparison.OrdinalIgnoreCase))
+                {
+                    var varName = assertion.Source.Substring("Variable.".Length);
+                    sourceValue = context.GetVariable(varName);
+                    trace($"Assertion source Variable.{varName} = {sourceValue}");
+                }
+                else
+                {
+                    sourceValue = GetSourceValue(assertion.Source, componentData);
+                }
+                
                 var actualValue = ExtractValue(sourceValue, assertion.JsonPath);
                 var (passed, message) = Compare(actualValue, assertion.Condition, assertion.Expected);
 
@@ -104,6 +117,12 @@ namespace Test_Automation.Services
 
         private object? GetSourceValue(string source, ComponentData componentData)
         {
+            // Handle Variable source - this will be resolved using context in EvaluateAssertions
+            if (source.StartsWith("Variable.", StringComparison.OrdinalIgnoreCase))
+            {
+                return source; // Return the full source string to be resolved later
+            }
+
             // Handle UI source names (PreviewResponse, PreviewRequest, etc.)
             if (string.Equals(source, "PreviewResponse", StringComparison.OrdinalIgnoreCase))
             {

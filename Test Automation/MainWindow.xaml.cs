@@ -6998,11 +6998,15 @@ namespace Test_Automation
                 ExtractorSourceOptions.Add(source);
             }
 
+            // Add Variables option to indicate selecting from variables
+            ExtractorSourceOptions.Add("Variable");
+
             if (SelectedNode == null)
             {
                 return;
             }
 
+            // Add settings keys as sources
             var keys = SelectedNode.Settings
                 .Select(setting => setting.Key)
                 .Where(key => !string.IsNullOrWhiteSpace(key))
@@ -7017,7 +7021,39 @@ namespace Test_Automation
                 }
             }
 
+            // Add variables from current node and parent nodes
+            AddVariablesToSourceOptions(SelectedNode);
+
             RefreshAssertionJsonTreePanel();
+        }
+
+        private void AddVariablesToSourceOptions(PlanNode node)
+        {
+            // Collect all variables from this node and ancestors
+            var variables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var current = node;
+            
+            while (current != null)
+            {
+                foreach (var variable in current.Variables)
+                {
+                    if (!string.IsNullOrWhiteSpace(variable.Key))
+                    {
+                        variables.Add(variable.Key);
+                    }
+                }
+                current = current.Parent;
+            }
+
+            // Add variables to options with "Variable." prefix to distinguish from settings
+            foreach (var varName in variables.OrderBy(v => v, StringComparer.OrdinalIgnoreCase))
+            {
+                var varSource = $"Variable.{varName}";
+                if (!ExtractorSourceOptions.Contains(varSource))
+                {
+                    ExtractorSourceOptions.Add(varSource);
+                }
+            }
         }
 
         private void AddExtractorButton_Click(object sender, RoutedEventArgs e)
